@@ -172,9 +172,9 @@ if (isset($_SESSION['user'])) {
         <?php if (!$is_logged_in): ?>
             <!-- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ -->
             <div style="text-align: center;">
-                <div style="display: inline-flex; padding: 12px; border-radius: 16px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); margin-bottom: 20px;">
+                <div style="display: inline-flex; padding: 12px; border-radius: 16px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.2); margin-bottom: 20px;">
                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 12 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="#818cf8"/>
+                        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 12 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="#0284c7"/>
                     </svg>
                 </div>
                 
@@ -254,10 +254,10 @@ if (isset($_SESSION['user'])) {
                     Đăng nhập bằng tài khoản Google
                 </a>
 
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 13px; color: var(--text-muted);">
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(226, 232, 240, 0.8); font-size: 13px; color: var(--text-muted);">
                     Chưa cài đặt cấu trúc bảng trong CSDL?
                     <br>
-                    <a href="db_setup.php" style="color: var(--primary); text-decoration: none; font-weight: 500; display: inline-block; margin-top: 5px;">
+                    <a href="db_setup.php" style="color: var(--primary); text-decoration: none; font-weight: 600; display: inline-block; margin-top: 5px;">
                         👉 Chạy Script Cấu Hình DB Tự Động
                     </a>
                 </div>
@@ -313,7 +313,7 @@ if (isset($_SESSION['user'])) {
                     <div class="info-item" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div>
                             <div class="info-label">Hạng thành viên</div>
-                            <div class="info-value" style="color: #fbbf24; font-weight: 600;"><?php echo htmlspecialchars($user_data['HangThanhVien'] ?? 'Đồng'); ?></div>
+                            <div class="info-value" style="color: #d97706; font-weight: 600;"><?php echo htmlspecialchars($user_data['HangThanhVien'] ?? 'Đồng'); ?></div>
                         </div>
                         <div>
                             <div class="info-label">Điểm uy tín</div>
@@ -335,7 +335,7 @@ if (isset($_SESSION['user'])) {
         <?php endif; ?>
 
         <?php if ($db_error): ?>
-            <div style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 12px; padding: 12px; margin-top: 20px; font-size: 13px; color: #fca5a5;">
+            <div style="background: var(--error-bg); border: 1px solid var(--error-border); border-radius: 12px; padding: 12px; margin-top: 20px; font-size: 13px; color: var(--error);">
                 ⚠️ <strong>Cảnh báo Database (Port <?php echo DB_PORT; ?>):</strong> <?php echo htmlspecialchars($db_error_message); ?>
             </div>
         <?php endif; ?>
