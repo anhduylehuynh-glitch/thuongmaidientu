@@ -38,7 +38,7 @@ CREATE TABLE NguoiDung (
     Email VARCHAR(50) NULL UNIQUE,
     DiemUyTin INT DEFAULT 0, -- Tích lũy để phân hạng thành viên
     HangThanhVien VARCHAR(30) DEFAULT 'Đồng', -- 'Đồng', 'Bạc', 'Vàng', 'Kim Cương'
-    TrangThaiTaiKhoan VARCHAR(30) DEFAULT 'Hoạt động', -- 'Hoạt động', 'Bị khóa'
+    TrangThaiTaiKhoan BIT(1) DEFAULT b'1', -- b'1': Hoạt động, b'0': Bị khóa
     NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -82,7 +82,7 @@ CREATE TABLE ViDienTu (
     MaVi INT AUTO_INCREMENT PRIMARY KEY,
     MaNguoiDung INT NOT NULL UNIQUE,
     SoDu DECIMAL(15, 2) DEFAULT 0.00,
-    TrangThaiVi VARCHAR(30) DEFAULT 'Hoạt động', -- 'Hoạt động', 'Bị khóa'
+    TrangThaiVi BIT(1) DEFAULT b'1', -- b'1': Hoạt động, b'0': Bị khóa
     NgayCapNhat TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (MaNguoiDung) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE
 );
@@ -105,7 +105,7 @@ CREATE TABLE YeuCauRutTien (
     MaVi INT NOT NULL,
     MaTaiKhoan INT NOT NULL,
     SoTien DECIMAL(15, 2) NOT NULL,
-    TrangThai VARCHAR(30) DEFAULT 'Chờ duyệt', -- 'Chờ duyệt', 'Đã chuyển khoản', 'Từ chối'
+    TrangThai BIT(2) DEFAULT b'00', -- b'00': Chờ duyệt, b'01': Đã chuyển khoản, b'10': Từ chối
     LyDoTuChoi VARCHAR(255) NULL,
     NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     NgayXuLy TIMESTAMP NULL,
@@ -135,8 +135,8 @@ CREATE TABLE SanPham (
     KhoiLuong_Kg DECIMAL(6, 2) NOT NULL, -- Phục vụ tính phí vận chuyển theo khối lượng
     GiaBan DECIMAL(15, 2) NOT NULL,
     VideoThucTe VARCHAR(255) NULL, -- Link video chứng minh thực trạng sản phẩm
-    TrangThaiDuyet VARCHAR(30) DEFAULT 'Chờ duyệt', -- 'Chờ duyệt', 'Đã duyệt', 'Bị từ chối'
-    TrangThaiBan VARCHAR(30) DEFAULT 'Sẵn sàng', -- 'Sẵn sàng', 'Đang giao dịch', 'Đã bán', 'Đã ẩn'
+    TrangThaiDuyet BIT(2) DEFAULT b'00', -- b'00': Chờ duyệt, b'01': Đã duyệt, b'10': Từ chối
+    TrangThaiBan BIT(2) DEFAULT b'00', -- b'00': Sẵn sàng, b'01': Đang giao dịch, b'10': Đã bán, b'11': Đã ẩn
     NgayDang TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (MaNguoiBan) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE,
     FOREIGN KEY (MaDanhMuc) REFERENCES DanhMuc(MaDanhMuc)
@@ -179,17 +179,7 @@ CREATE TABLE TinNhanChat (
     FOREIGN KEY (MaNguoiGui) REFERENCES NguoiDung(MaNguoiDung)
 );
 
--- Bảng Yêu cầu trả giá / Thương lượng (Bổ sung theo PRD để theo dõi trả giá sản phẩm)
-CREATE TABLE YeuCauTraGia (
-    MaYeuCauTraGia INT AUTO_INCREMENT PRIMARY KEY,
-    MaSanPham INT NOT NULL,
-    MaNguoiMua INT NOT NULL,
-    GiaDeNghi DECIMAL(15, 2) NOT NULL,
-    TrangThai VARCHAR(30) DEFAULT 'Chờ phản hồi', -- 'Chờ phản hồi', 'Chấp nhận', 'Từ chối', 'Đã hủy'
-    NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (MaSanPham) REFERENCES SanPham(MaSanPham) ON DELETE CASCADE,
-    FOREIGN KEY (MaNguoiMua) REFERENCES NguoiDung(MaNguoiDung)
-);
+
 
 -- ----------------------------------------------------------------------------
 -- 6. ĐƠN HÀNG, CHI TIẾT ĐƠN HÀNG & LOGISTICS NỘI BỘ
@@ -202,8 +192,8 @@ CREATE TABLE DonHang (
     MaDiaChiGiao INT NOT NULL, -- Địa chỉ nhận hàng của người mua
     PhuongThucThanhToan VARCHAR(50) NOT NULL, -- 'COD', 'Ví điện tử', 'Thẻ ngân hàng', 'VNPay'
     TongTienThanhToan DECIMAL(15, 2) NOT NULL, -- Tổng tiền (Giá sản phẩm + Phí ship thực tế)
-    TrangThaiDonHang VARCHAR(30) DEFAULT 'Chờ xác nhận', -- 'Chờ xác nhận', 'Đang xử lý', 'Đang giao', 'Đã giao', 'Khiếu nại', 'Hoàn tất', 'Đã hủy'
-    TrangThaiThanhToan VARCHAR(50) DEFAULT 'Chưa thanh toán', -- 'Chưa thanh toán', 'Đã thanh toán', 'Tạm giữ (Escrow)', 'Đã giải ngân', 'Đã hoàn tiền'
+    TrangThaiDonHang BIT(3) DEFAULT b'000', -- b'000': Chờ xác nhận, b'001': Đang xử lý, b'010': Đang giao, b'011': Đã giao, b'100': Khiếu nại, b'101': Hoàn tất, b'110': Đã hủy
+    TrangThaiThanhToan BIT(3) DEFAULT b'000', -- b'000': Chưa thanh toán, b'001': Đã thanh toán, b'010': Tạm giữ (Escrow), b'011': Đã giải ngân, b'100': Đã hoàn tiền
     NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (MaNguoiMua) REFERENCES NguoiDung(MaNguoiDung),
     FOREIGN KEY (MaDiaChiGiao) REFERENCES SoDiaChi(MaDiaChi)
@@ -230,7 +220,7 @@ CREATE TABLE LichSuGiaoDichVi (
     MaViDich INT NULL, -- NULL nếu rút tiền về tài khoản ngân hàng
     SoTien DECIMAL(15, 2) NOT NULL,
     LoaiGiaoDich VARCHAR(50) NOT NULL, -- 'THANH_TOAN', 'ESCROW_TAM_GIU', 'ESCROW_GIAI_NGAN', 'HOAN_TIEN_KHI_NAI', 'TRU_QUY_SHIPPER_COD', 'RUT_TIEN'
-    TrangThai VARCHAR(30) DEFAULT 'Thành công', -- 'Thành công', 'Thất bại', 'Đang xử lý'
+    TrangThai BIT(2) DEFAULT b'00', -- b'00': Đang xử lý, b'01': Thành công, b'10': Thất bại
     MoTa VARCHAR(255) NULL,
     MaDonHang INT NULL,
     MaSanPham INT NULL, -- Liên kết trực tiếp tới sản phẩm/chi tiết đơn hàng để dễ đối soát
@@ -260,7 +250,7 @@ CREATE TABLE PhieuGiaoNhan (
     MaDonHang INT NOT NULL,
     MaSanPham INT NOT NULL,
     LoaiNhiemVu VARCHAR(50) NOT NULL, -- 'Lấy hàng' (từ Seller về kho), 'Giao hàng' (từ kho đến Buyer)
-    TrangThaiNhiemVu VARCHAR(50) DEFAULT 'Chờ tiếp nhận', -- 'Chờ tiếp nhận', 'Đang thực hiện', 'Thành công', 'Thất bại'
+    TrangThaiNhiemVu BIT(2) DEFAULT b'00', -- b'00': Chờ tiếp nhận, b'01': Đang thực hiện, b'10': Thành công, b'11': Thất bại
     TienThuHo DECIMAL(15, 2) DEFAULT 0.00, -- Số tiền COD cần thu (nếu có)
     LyDoThatBai VARCHAR(255) NULL,
     NgayNhanNhiemVu TIMESTAMP NULL,
@@ -294,7 +284,7 @@ CREATE TABLE BienBanSuCo (
     MoTaChiTiet TEXT NOT NULL,
     GiaTriThietHai DECIMAL(15, 2) NOT NULL,
     SoTienDenBu DECIMAL(15, 2) DEFAULT 0.00, -- Sàn đền bù cho người bán/mua
-    TrangThai VARCHAR(30) DEFAULT 'Chờ xử lý', -- 'Chờ xử lý', 'Đã đền bù', 'Từ chối'
+    TrangThai BIT(2) DEFAULT b'00', -- b'00': Chờ xử lý, b'01': Đã đền bù, b'10': Từ chối
     NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (MaDonHang, MaSanPham) REFERENCES ChiTietDonHang(MaDonHang, MaSanPham) ON DELETE CASCADE,
     FOREIGN KEY (MaNguoiLap) REFERENCES NguoiDung(MaNguoiDung)
@@ -312,7 +302,7 @@ CREATE TABLE DonKhieuNaiTraHang (
     MaNguoiKhieuNai INT NOT NULL, -- Thường là Người mua khiếu nại
     LyDoKhieuNai VARCHAR(200) NOT NULL,
     VideoUnboxing VARCHAR(255) NOT NULL, -- Bắt buộc theo PRD làm bằng chứng đổi trả
-    TrangThaiKhieuNai VARCHAR(50) DEFAULT 'Chờ xử lý', -- 'Chờ xử lý', 'Chấp nhận trả tiền', 'Từ chối khiếu nại'
+    TrangThaiKhieuNai BIT(2) DEFAULT b'00', -- b'00': Chờ xử lý, b'01': Chấp nhận trả tiền, b'10': Từ chối khiếu nại
     KetQua VARCHAR(200) NULL, -- Ý kiến giải quyết của Moderator
     NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (MaDonHang, MaSanPham) REFERENCES ChiTietDonHang(MaDonHang, MaSanPham) ON DELETE CASCADE,
