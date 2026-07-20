@@ -1,6 +1,11 @@
 <?php
 require_once 'config/config.php';
 
+if (isset($_SESSION['user'])) {
+    header("Location: index.php");
+    exit;
+}
+
 // Tạo mã state bảo mật để tránh tấn công CSRF (Cross-Site Request Forgery)
 if (empty($_SESSION['oauth2state'])) {
     $_SESSION['oauth2state'] = bin2hex(random_bytes(16));

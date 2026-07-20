@@ -17,11 +17,13 @@ define('DB_NAME', 'thuongmaidientu');
 // CẤU HÌNH GOOGLE OAUTH 2.0
 // ============================================================================
 // HƯỚNG DẪN: Hãy thay thế bằng Client ID & Client Secret thực tế của bạn
-define('GOOGLE_CLIENT_ID', 'YOUR_GOOGLE_CLIENT_ID');
-define('GOOGLE_CLIENT_SECRET', 'YOUR_GOOGLE_CLIENT_SECRET');
+//fine('GOOGLE_CLIENT_ID', '');
+//fine('GOOGLE_CLIENT_SECRET', '');
 
-// Đường dẫn nhận phản hồi (Redirect URI) từ Google (Chỉ định rõ cổng 8080 của XAMPP Apache)
-define('GOOGLE_REDIRECT_URI', 'http://localhost:8080/thuongmaidientu/callback.php');
+// Đường dẫn nhận phản hồi (Redirect URI) từ Google (Tự động nhận diện cổng localhost của từng máy)
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+define('GOOGLE_REDIRECT_URI', $protocol . '://' . $host . '/thuongmaidientu/callback.php');
 
 // ============================================================================
 // HÀM KẾT NỐI DATABASE DÙNG CHUNG (PDO)

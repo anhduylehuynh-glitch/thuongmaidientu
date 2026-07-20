@@ -6,129 +6,21 @@ $user_data = null;
 $user_roles = [];
 $db_error = false;
 $db_error_message = '';
-$raw_db_row = null;
-
-$error = '';
-$success = '';
-
-// Xử lý gửi Form đăng ký / đăng nhập thông thường
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (isset($_POST['action_login'])) {
-        $username_or_email = trim($_POST['username_or_email'] ?? '');
-        $password = $_POST['password'] ?? '';
-
-        if (empty($username_or_email) || empty($password)) {
-            $error = 'Vui lòng nhập đầy đủ tên đăng nhập/email và mật khẩu.';
-        } else {
-            try {
-                $db = getDBConnection();
-                $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `TenDangNhap` = :login OR `Email` = :email");
-                $stmt->execute(['login' => $username_or_email, 'email' => $username_or_email]);
-                $user = $stmt->fetch();
-
-                if ($user && !empty($user['MatKhau']) && password_verify($password, $user['MatKhau'])) {
-                    // Đăng nhập thành công
-                    $_SESSION['user'] = $user;
-                    header("Location: index.php");
-                    exit;
-                } else {
-                    $error = 'Tên đăng nhập/Email hoặc mật khẩu không chính xác.';
-                }
-            } catch (Exception $e) {
-                $error = 'Lỗi hệ thống: ' . $e->getMessage();
-            }
-        }
-    } elseif (isset($_POST['action_register'])) {
-        $fullname = trim($_POST['fullname'] ?? '');
-        $username = trim($_POST['username'] ?? '');
-        $email = trim($_POST['email'] ?? '');
-        $phone = trim($_POST['phone'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $confirm_password = $_POST['confirm_password'] ?? '';
-
-        if (empty($fullname) || empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
-            $error = 'Vui lòng điền đầy đủ các thông tin bắt buộc.';
-        } elseif ($password !== $confirm_password) {
-            $error = 'Mật khẩu xác nhận không khớp.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Định dạng email không hợp lệ.';
-        } else {
-            try {
-                $db = getDBConnection();
-
-                // Kiểm tra trùng lặp tên đăng nhập hoặc email
-                $stmt = $db->prepare("SELECT COUNT(*) FROM `NguoiDung` WHERE `TenDangNhap` = :username OR `Email` = :email");
-                $stmt->execute(['username' => $username, 'email' => $email]);
-                if ($stmt->fetchColumn() > 0) {
-                    $error = 'Tên đăng nhập hoặc Email đã tồn tại trên hệ thống.';
-                } else {
-                    // Mã hóa mật khẩu
-                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-
-                    // Thêm người dùng mới
-                    $insert_stmt = $db->prepare("INSERT INTO `NguoiDung` 
-                        (`TenDangNhap`, `MatKhau`, `HoTen`, `Email`, `SoDienThoai`, `DiemUyTin`, `HangThanhVien`, `TrangThaiTaiKhoan`) 
-                        VALUES 
-                        (:username, :password, :fullname, :email, :phone, 0, 'Đồng', b'1')");
-
-                    $insert_stmt->execute([
-                        'username' => $username,
-                        'password' => $hashed_password,
-                        'fullname' => $fullname,
-                        'email'    => $email,
-                        'phone'    => !empty($phone) ? $phone : null
-                    ]);
-
-                    $new_user_id = $db->lastInsertId();
-
-                    // Gán vai trò mặc định (BUYER)
-                    $role_stmt = $db->prepare("SELECT `MaVaiTro` FROM `VaiTro` WHERE `TenVaiTro` = 'BUYER'");
-                    $role_stmt->execute();
-                    $role_id = $role_stmt->fetchColumn();
-
-                    if (!$role_id) {
-                        $role_stmt = $db->prepare("SELECT `MaVaiTro` FROM `VaiTro` LIMIT 1");
-                        $role_stmt->execute();
-                        $role_id = $role_stmt->fetchColumn();
-                    }
-
-                    if ($role_id) {
-                        $user_role_stmt = $db->prepare("INSERT INTO `NguoiDung_VaiTro` (`MaNguoiDung`, `MaVaiTro`) VALUES (:uid, :rid)");
-                        $user_role_stmt->execute(['uid' => $new_user_id, 'rid' => $role_id]);
-                    }
-
-                    // Tự động đăng nhập
-                    $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
-                    $stmt->execute(['id' => $new_user_id]);
-                    $_SESSION['user'] = $stmt->fetch();
-
-                    $success = 'Đăng ký tài khoản thành công!';
-                    header("Location: index.php");
-                    exit;
-                }
-            } catch (Exception $e) {
-                $error = 'Lỗi đăng ký: ' . $e->getMessage();
-            }
-        }
-    }
-}
-
 
 // Kiểm tra xem đã đăng nhập chưa
 if (isset($_SESSION['user'])) {
     try {
         $db = getDBConnection();
         $session_user = $_SESSION['user'];
-        
+
         // Truy vấn dữ liệu mới nhất từ CSDL
         $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
         $stmt->execute(['id' => $session_user['MaNguoiDung']]);
         $user_data = $stmt->fetch();
-        
+
         if ($user_data) {
             $is_logged_in = true;
-            $raw_db_row = $user_data; // Lưu lại để hiển thị dạng JSON debug
-            
+
             // Lấy danh sách vai trò
             $role_stmt = $db->prepare("
                 SELECT vt.TenVaiTro 
@@ -139,7 +31,6 @@ if (isset($_SESSION['user'])) {
             $role_stmt->execute(['id' => $user_data['MaNguoiDung']]);
             $user_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
         } else {
-            // Trường hợp tài khoản bị xóa trong DB khi session vẫn còn
             session_destroy();
             header("Location: index.php");
             exit;
@@ -147,11 +38,79 @@ if (isset($_SESSION['user'])) {
     } catch (Exception $e) {
         $db_error = true;
         $db_error_message = $e->getMessage();
-        // Vẫn cho phép hiển thị thông tin từ Session nếu lỗi kết nối DB xảy ra sau khi đăng nhập
         $is_logged_in = true;
         $user_data = $_SESSION['user'];
         $user_roles = ['Mất kết nối DB'];
     }
+}
+
+// Truy vấn sản phẩm bán đồ cũ
+$products = [];
+try {
+    $db = getDBConnection();
+    $stmt = $db->query("
+        SELECT sp.*, nd.HoTen as TenNguoiBan, nd.DiemUyTin, nd.google_picture as SellerAvatar, dm.TenDanhMuc, ha.DuongDanAnh
+        FROM SanPham sp
+        JOIN NguoiDung nd ON sp.MaNguoiBan = nd.MaNguoiDung
+        JOIN DanhMuc dm ON sp.MaDanhMuc = dm.MaDanhMuc
+        LEFT JOIN HinhAnhSP ha ON sp.MaSanPham = ha.MaSanPham AND ha.AnhChinh = 1
+        WHERE sp.TrangThaiDuyet = b'01' AND sp.TrangThaiBan = b'00'
+        ORDER BY sp.NgayDang DESC
+        LIMIT 8
+    ");
+    $products = $stmt->fetchAll();
+} catch (Exception $e) {
+    // Không có DB hoặc bảng trống -> Sử dụng sản phẩm mẫu
+}
+
+// Nếu không có sản phẩm nào thì tạo danh sách sản phẩm mẫu (Mock Products)
+if (empty($products)) {
+    $products = [
+        [
+            'MaSanPham' => 1,
+            'TenSanPham' => 'iPhone 13 Pro Max - 256GB Gold',
+            'GiaBan' => 14500000,
+            'TinhTrang' => 'Cũ xước nhẹ',
+            'TenDanhMuc' => 'Điện thoại',
+            'TenNguoiBan' => 'Nguyễn Văn A',
+            'DiemUyTin' => 95,
+            'DuongDanAnh' => '',
+            'SellerAvatar' => ''
+        ],
+        [
+            'MaSanPham' => 2,
+            'TenSanPham' => 'Laptop Dell XPS 13 9305 Core i7',
+            'GiaBan' => 16200000,
+            'TinhTrang' => 'Mới 98%',
+            'TenDanhMuc' => 'Máy tính & Laptop',
+            'TenNguoiBan' => 'Trần Thị B',
+            'DiemUyTin' => 88,
+            'DuongDanAnh' => '',
+            'SellerAvatar' => ''
+        ],
+        [
+            'MaSanPham' => 3,
+            'TenSanPham' => 'Bàn phím cơ Keychron K2 V2 Aluminum',
+            'GiaBan' => 1500000,
+            'TinhTrang' => 'Hoạt động tốt',
+            'TenDanhMuc' => 'Phụ kiện máy tính',
+            'TenNguoiBan' => 'Phan Văn C',
+            'DiemUyTin' => 92,
+            'DuongDanAnh' => '',
+            'SellerAvatar' => ''
+        ],
+        [
+            'MaSanPham' => 4,
+            'TenSanPham' => 'Tai nghe không dây Sony WH-1000XM4',
+            'GiaBan' => 4200000,
+            'TinhTrang' => 'Fullbox - Mới 99%',
+            'TenDanhMuc' => 'Thiết bị âm thanh',
+            'TenNguoiBan' => 'Lê Thị D',
+            'DiemUyTin' => 99,
+            'DuongDanAnh' => '',
+            'SellerAvatar' => ''
+        ]
+    ];
 }
 ?>
 <!DOCTYPE html>
@@ -159,7 +118,7 @@ if (isset($_SESSION['user'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thử Nghiệm Đăng Nhập Google - PHP & MySQL 3307</title>
+    <title>Chợ Đồ Cũ - Nền Tảng Thương Mại Điện Tử Đồ Cũ Uy Tín</title>
     <!-- Google Fonts Outfit -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
@@ -168,217 +127,172 @@ if (isset($_SESSION['user'])) {
     <!-- Background hiệu ứng mờ và vòng tròn màu sắc -->
     <div class="background-decor"></div>
 
-    <div class="card">
-        <?php if (!$is_logged_in): ?>
-            <!-- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ -->
-            <div style="text-align: center;">
-                <div style="display: inline-flex; padding: 12px; border-radius: 16px; background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.2); margin-bottom: 20px;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 12 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="#0284c7"/>
+    <div class="site-wrapper">
+        <!-- Header / Navigation Bar -->
+        <header class="site-header">
+            <div class="nav-container">
+                <a href="index.php" class="brand-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="fill: url(#logoGradient);">
+                        <defs>
+                            <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#6366f1" />
+                                <stop offset="100%" stop-color="#a855f7" />
+                            </linearGradient>
+                        </defs>
+                        <path d="M12 2L2 22H22L12 2ZM12 6L18.8 19.6H5.2L12 6Z"/>
                     </svg>
-                </div>
-                
-                <h1 style="margin-bottom: 20px;">Hệ Thống Đăng Nhập</h1>
-
-                <!-- Thông báo lỗi hoặc thành công -->
-                <?php if (!empty($error)): ?>
-                    <div class="alert-message error">
-                        ⚠️ <?php echo htmlspecialchars($error); ?>
-                    </div>
-                <?php endif; ?>
-                <?php if (!empty($success)): ?>
-                    <div class="alert-message success">
-                        ✅ <?php echo htmlspecialchars($success); ?>
-                    </div>
-                <?php endif; ?>
-
-                <!-- Khung chuyển Tabs -->
-                <div class="tabs-container">
-                    <button type="button" id="login-tab-btn" class="tab-btn active" onclick="switchTab('login')">Đăng Nhập</button>
-                    <button type="button" id="register-tab-btn" class="tab-btn" onclick="switchTab('register')">Đăng Ký</button>
-                </div>
-
-                <!-- Form Đăng Nhập -->
-                <div id="login-view" class="form-view active">
-                    <form method="POST" action="index.php">
-                        <div class="form-group">
-                            <label for="login_username">Tên đăng nhập hoặc Email</label>
-                            <input type="text" name="username_or_email" id="login_username" class="form-control" placeholder="Nhập tên đăng nhập hoặc email" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="login_password">Mật khẩu</label>
-                            <input type="password" name="password" id="login_password" class="form-control" placeholder="••••••••" required>
-                        </div>
-                        <button type="submit" name="action_login" class="btn btn-primary" style="margin-top: 10px;">Đăng Nhập</button>
-                    </form>
-                </div>
-
-                <!-- Form Đăng Ký -->
-                <div id="register-view" class="form-view">
-                    <form method="POST" action="index.php">
-                        <div class="form-group">
-                            <label for="reg_fullname">Họ và tên <span style="color:var(--error)">*</span></label>
-                            <input type="text" name="fullname" id="reg_fullname" class="form-control" placeholder="Nguyễn Văn A" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="reg_username">Tên đăng nhập <span style="color:var(--error)">*</span></label>
-                            <input type="text" name="username" id="reg_username" class="form-control" placeholder="username123" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="reg_email">Địa chỉ Email <span style="color:var(--error)">*</span></label>
-                            <input type="email" name="email" id="reg_email" class="form-control" placeholder="email@viethan.edu.vn" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="reg_phone">Số điện thoại</label>
-                            <input type="text" name="phone" id="reg_phone" class="form-control" placeholder="0905xxxxxx">
-                        </div>
-                        <div class="form-group">
-                            <label for="reg_password">Mật khẩu <span style="color:var(--error)">*</span></label>
-                            <input type="password" name="password" id="reg_password" class="form-control" placeholder="••••••••" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="reg_confirm_password">Xác nhận mật khẩu <span style="color:var(--error)">*</span></label>
-                            <input type="password" name="confirm_password" id="reg_confirm_password" class="form-control" placeholder="••••••••" required>
-                        </div>
-                        <button type="submit" name="action_register" class="btn btn-primary" style="margin-top: 10px;">Đăng Ký Tài Khoản</button>
-                    </form>
-                </div>
-
-                <!-- Đường chia và nút Đăng nhập bằng Google -->
-                <div class="divider-container">Hoặc đăng nhập bằng</div>
-
-                <!-- Nút Đăng nhập Google chuẩn chính hãng -->
-                <a href="login.php" class="btn-google">
-                    <!-- Biểu tượng chữ G chuẩn Google -->
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22Coloured%22_logo.svg" alt="Google Logo" onerror="this.src='https://developers.google.com/static/identity/images/g-logo.png'">
-                    Đăng nhập bằng tài khoản Google
+                    Chợ Đồ Cũ
                 </a>
+                
+                <nav class="nav-menu">
+                    <a href="index.php" class="nav-link active">Trang Chủ</a>
+                    <a href="#" class="nav-link">Sản Phẩm</a>
+                    <a href="#" class="nav-link">Liên Hệ</a>
+                    
+                    <!-- Khối người dùng -->
+                    <?php if ($is_logged_in): ?>
+                        <div class="user-menu-wrapper">
+                            <div class="user-trigger-btn" id="userDropdownTrigger">
+                                <?php if (!empty($user_data['google_picture'])): ?>
+                                    <img src="<?php echo htmlspecialchars($user_data['google_picture']); ?>" alt="Avatar" class="user-avatar-mini">
+                                <?php else: ?>
+                                    <div class="user-avatar-mini-fallback">
+                                        <?php echo strtoupper(substr($user_data['HoTen'] ?? 'U', 0, 1)); ?>
+                                    </div>
+                                <?php endif; ?>
+                                <span class="user-name-mini"><?php echo htmlspecialchars($user_data['HoTen'] ?? 'Thành viên'); ?></span>
+                            </div>
+                            
+                            <!-- Dropdown menu ẩn/hiện -->
+                            <div class="dropdown-menu" id="userDropdownMenu">
+                                <div style="padding: 12px 18px; font-size: 0.8rem; color: var(--text-muted); border-bottom: 1px solid var(--card-border);">
+                                    Đăng nhập từ: <b><?php echo !empty($user_data['google_id']) ? 'Google' : 'Hệ thống'; ?></b>
+                                </div>
+                                <a href="profile.php" class="dropdown-item">
+                                    👤 Hồ sơ cá nhân
+                                </a>
+                                <div class="dropdown-divider"></div>
+                                <a href="logout.php" class="dropdown-item" style="color: var(--error)">
+                                    🚪 Đăng xuất
+                                </a>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <a href="login_page.php" class="btn btn-primary" style="padding: 8px 18px; font-size: 0.9rem; border-radius: 50px;">Đăng Nhập</a>
+                    <?php endif; ?>
+                </nav>
+            </div>
+        </header>
 
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid rgba(226, 232, 240, 0.8); font-size: 13px; color: var(--text-muted);">
-                    Chưa cài đặt cấu trúc bảng trong CSDL?
-                    <br>
-                    <a href="db_setup.php" style="color: var(--primary); text-decoration: none; font-weight: 600; display: inline-block; margin-top: 5px;">
-                        👉 Chạy Script Cấu Hình DB Tự Động
-                    </a>
+        <!-- Hero Banner Section -->
+        <section class="hero-section">
+            <div class="hero-banner">
+                <div>
+                    <h1 class="hero-title">Mua Bán Đồ Cũ <br>An Toàn & Uy Tín</h1>
+                    <p class="hero-subtitle">
+                        Nền tảng kết nối người mua và người bán đồ cũ nhanh chóng. Tích hợp thanh toán an toàn, đánh giá điểm uy tín và hỗ trợ giao dịch P2P tối ưu.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="#" class="btn btn-primary" style="border-radius: 50px;">Khám phá ngay</a>
+                        <a href="#" class="btn btn-outline" style="border-radius: 50px;">Đăng bán đồ cũ</a>
+                    </div>
+                </div>
+                <div class="hero-img-wrapper">
+                    <div class="hero-badge-container">
+                        <div class="hero-stat-value">50,000+</div>
+                        <div class="hero-stat-label">Sản phẩm chất lượng</div>
+                        <div style="margin: 20px 0; border-top: 1px solid rgba(255, 255, 255, 0.05);"></div>
+                        <div class="hero-stat-value">99%</div>
+                        <div class="hero-stat-label">Khách hàng hài lòng</div>
+                    </div>
                 </div>
             </div>
+        </section>
 
-        <?php else: ?>
-            <!-- GIAO DIỆN ĐÃ ĐĂNG NHẬP THÀNH CÔNG -->
-            <div class="profile-card">
-                <div class="avatar-wrapper">
-                    <?php if (!empty($user_data['google_picture'])): ?>
-                        <img src="<?php echo htmlspecialchars($user_data['google_picture']); ?>" alt="Avatar" class="avatar">
-                    <?php else: ?>
-                        <div class="avatar-fallback">
-                            <?php echo strtoupper(substr($user_data['HoTen'] ?? 'U', 0, 1)); ?>
-                        </div>
-                    <?php endif; ?>
+        <!-- Products Section -->
+        <main class="products-section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">Sản Phẩm Nổi Bật</h2>
+                    <p class="section-desc">Khám phá các sản phẩm chất lượng từ những người bán uy tín nhất</p>
                 </div>
+                <a href="#" style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.95rem;">Xem tất cả →</a>
+            </div>
 
-                <h2>Chào, <?php echo htmlspecialchars($user_data['HoTen'] ?? 'Thành viên'); ?>!</h2>
-                <p style="color: var(--success); font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; margin-top: 5px;">
-                    <span style="display:inline-block; width:6px; height:6px; background-color:var(--success); border-radius:50%"></span>
-                    <?php if (!empty($user_data['google_id'])): ?>
-                        Đã đăng nhập qua tài khoản Google
-                    <?php else: ?>
-                        Đã đăng nhập bằng tài khoản hệ thống
-                    <?php endif; ?>
+            <!-- Lưới sản phẩm -->
+            <div class="products-grid">
+                <?php foreach ($products as $prod): ?>
+                    <div class="product-card">
+                        <div class="product-image-container">
+                            <?php if (!empty($prod['DuongDanAnh'])): ?>
+                                <img src="<?php echo htmlspecialchars($prod['DuongDanAnh']); ?>" alt="Product" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: cover;">
+                            <?php else: ?>
+                                <div class="product-image-fallback">
+                                    📦
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">Hình ảnh chưa cập nhật</span>
+                                </div>
+                            <?php endif; ?>
+                            <span class="product-tag"><?php echo htmlspecialchars($prod['TenDanhMuc']); ?></span>
+                            <span class="product-condition"><?php echo htmlspecialchars($prod['TinhTrang']); ?></span>
+                        </div>
+                        
+                        <div class="product-content">
+                            <a href="#" class="product-title"><?php echo htmlspecialchars($prod['TenSanPham']); ?></a>
+                            <div class="product-price"><?php echo number_format($prod['GiaBan'], 0, ',', '.'); ?> đ</div>
+                            
+                            <div class="product-footer">
+                                <div class="seller-info">
+                                    <?php if (!empty($prod['SellerAvatar'])): ?>
+                                        <img src="<?php echo htmlspecialchars($prod['SellerAvatar']); ?>" alt="Seller" class="seller-avatar">
+                                    <?php else: ?>
+                                        <div class="seller-avatar" style="background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; width: 24px; height: 24px; border-radius: 50%;">
+                                            <?php echo strtoupper(substr($prod['TenNguoiBan'], 0, 1)); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <span class="seller-name"><?php echo htmlspecialchars($prod['TenNguoiBan']); ?></span>
+                                </div>
+                                <span class="seller-reputation">⭐ <?php echo htmlspecialchars($prod['DiemUyTin']); ?> Uy Tín</span>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="site-footer">
+            <div class="footer-content">
+                <div class="footer-brand">Chợ Đồ Cũ</div>
+                <p class="footer-text">
+                    Nền tảng mua bán đồ cũ trực tuyến hiện đại, kết nối thông minh và giao dịch an toàn với hệ thống điểm uy tín cao.
                 </p>
-
-
-                <!-- Hiển thị badge vai trò người dùng -->
-                <div class="user-badge">
-                    Vai trò: <?php echo !empty($user_roles) ? implode(', ', $user_roles) : 'Chưa gán'; ?>
+                <div style="margin: 10px 0; display: flex; gap: 20px; font-size: 13px; color: var(--text-muted);">
+                    <a href="db_setup.php" style="color: var(--text-muted); text-decoration: none;">Cấu hình Database</a>
+                    <span>•</span>
+                    <a href="login_page.php" style="color: var(--text-muted); text-decoration: none;">Đăng nhập / Đăng ký</a>
                 </div>
-
-                <!-- Lưới thông tin tài khoản -->
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="info-label">Mã thành viên (ID)</div>
-                        <div class="info-value"><?php echo htmlspecialchars($user_data['MaNguoiDung']); ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Tên đăng nhập (Tự sinh)</div>
-                        <div class="info-value"><?php echo htmlspecialchars($user_data['TenDangNhap']); ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Địa chỉ Email</div>
-                        <div class="info-value"><?php echo htmlspecialchars($user_data['Email'] ?? 'Trống'); ?></div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Mã định danh Google ID</div>
-                        <div class="info-value code"><?php echo htmlspecialchars($user_data['google_id'] ?? 'Trống'); ?></div>
-                    </div>
-                    <div class="info-item" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div>
-                            <div class="info-label">Hạng thành viên</div>
-                            <div class="info-value" style="color: #d97706; font-weight: 600;"><?php echo htmlspecialchars($user_data['HangThanhVien'] ?? 'Đồng'); ?></div>
-                        </div>
-                        <div>
-                            <div class="info-label">Điểm uy tín</div>
-                            <div class="info-value"><?php echo htmlspecialchars($user_data['DiemUyTin'] ?? '0'); ?> ⭐</div>
-                        </div>
-                    </div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px;">
+                    &copy; 2026 Chợ Đồ Cũ Inc. Bảo lưu mọi quyền.
                 </div>
-
-                <!-- Trình quan sát dữ liệu database thực tế -->
-                <?php if ($raw_db_row): ?>
-                    <div class="db-visualizer">
-                        <h4>Xem hàng dữ liệu thực tế trong MySQL</h4>
-                        <pre class="db-code-block"><?php echo json_encode($raw_db_row, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE); ?></pre>
-                    </div>
-                <?php endif; ?>
-
-                <a href="logout.php" class="btn btn-outline" style="margin-top: 24px;">Đăng Xuất</a>
             </div>
-        <?php endif; ?>
-
-        <?php if ($db_error): ?>
-            <div style="background: var(--error-bg); border: 1px solid var(--error-border); border-radius: 12px; padding: 12px; margin-top: 20px; font-size: 13px; color: var(--error);">
-                ⚠️ <strong>Cảnh báo Database (Port <?php echo DB_PORT; ?>):</strong> <?php echo htmlspecialchars($db_error_message); ?>
-            </div>
-        <?php endif; ?>
+        </footer>
     </div>
 
-    <!-- Footer links -->
-    <div class="footer-links">
-        <a href="db_setup.php">Thiết lập Database</a>
-        <span style="color: var(--text-muted)">•</span>
-        <a href="https://console.cloud.google.com/" target="_blank">Google Developer Console</a>
-    </div>
+    <!-- Script điều khiển Dropdown người dùng -->
     <script>
-        function switchTab(tabName) {
-            // Deactivate all tab buttons
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
+        const trigger = document.getElementById('userDropdownTrigger');
+        const menu = document.getElementById('userDropdownMenu');
+        
+        if (trigger && menu) {
+            trigger.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.toggle('show');
             });
-            // Hide all form views
-            document.querySelectorAll('.form-view').forEach(view => {
-                view.classList.remove('active');
-            });
-
-            // Activate chosen tab button
-            const activeBtn = document.getElementById(tabName + '-tab-btn');
-            if (activeBtn) activeBtn.classList.add('active');
             
-            // Show chosen form view
-            const activeView = document.getElementById(tabName + '-view');
-            if (activeView) activeView.classList.add('active');
-
-            // Save active tab in sessionStorage so it persists on reload if needed
-            sessionStorage.setItem('active_auth_tab', tabName);
+            document.addEventListener('click', () => {
+                menu.classList.remove('show');
+            });
         }
-
-        // Initialize default tab (either login or register, default to login)
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedTab = sessionStorage.getItem('active_auth_tab') || 'login';
-            // Only switch if the forms exist
-            if (document.getElementById('login-view')) {
-                switchTab(savedTab);
-            }
-        });
     </script>
 </body>
 </html>
-
