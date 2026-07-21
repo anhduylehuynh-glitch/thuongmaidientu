@@ -71,6 +71,44 @@ if (isset($_POST['setup'])) {
             $message .= "• Đã nạp danh sách vai trò mẫu (ADMIN, BUYER, SELLER) thành công.<br>";
         }
 
+        // Thiết lập danh mục mặc định nếu chưa có
+        $default_cats = [
+            ['Ten' => 'Điện thoại', 'MoTa' => 'Điện thoại thông minh, máy đọc sách, phụ kiện điện thoại'],
+            ['Ten' => 'Máy tính', 'MoTa' => 'Laptop, máy tính để bàn, phụ kiện máy tính'],
+            ['Ten' => 'Đồ gia dụng', 'MoTa' => 'Thiết bị điện gia dụng, đồ dùng nhà bếp, máy hút bụi']
+        ];
+        foreach ($default_cats as $cat) {
+            $cat_chk = $pdo->prepare("SELECT COUNT(*) FROM `DanhMuc` WHERE `TenDanhMuc` = :t");
+            $cat_chk->execute(['t' => $cat['Ten']]);
+            if ($cat_chk->fetchColumn() == 0) {
+                $ins_cat = $pdo->prepare("INSERT INTO `DanhMuc` (`TenDanhMuc`, `MoTa`) VALUES (:t, :m)");
+                $ins_cat->execute(['t' => $cat['Ten'], 'm' => $cat['MoTa']]);
+                $message .= "• Đã tạo danh mục mặc định: `" . htmlspecialchars($cat['Ten']) . "`<br>";
+            }
+        }
+
+        // Tự động cấp quyền ADMIN cho các email quản trị viên chỉ định
+        $admin_emails = ['anhduylehuynh@gmail.com', 'tienle6040@gmail.com', 'anhduylehuynh@gmail'];
+        $admin_role_stmt = $pdo->query("SELECT `MaVaiTro` FROM `VaiTro` WHERE `TenVaiTro` = 'ADMIN'");
+        $admin_role_id = $admin_role_stmt->fetchColumn();
+
+        if ($admin_role_id) {
+            foreach ($admin_emails as $e) {
+                $user_stmt = $pdo->prepare("SELECT `MaNguoiDung`, `Email` FROM `NguoiDung` WHERE `Email` = :e OR `Email` LIKE :e_like");
+                $user_stmt->execute(['e' => $e, 'e_like' => $e . '%']);
+                $found_users = $user_stmt->fetchAll();
+                foreach ($found_users as $fu) {
+                    $chk = $pdo->prepare("SELECT COUNT(*) FROM `NguoiDung_VaiTro` WHERE `MaNguoiDung` = :uid AND `MaVaiTro` = :rid");
+                    $chk->execute(['uid' => $fu['MaNguoiDung'], 'rid' => $admin_role_id]);
+                    if ($chk->fetchColumn() == 0) {
+                        $ins = $pdo->prepare("INSERT INTO `NguoiDung_VaiTro` (`MaNguoiDung`, `MaVaiTro`) VALUES (:uid, :rid)");
+                        $ins->execute(['uid' => $fu['MaNguoiDung'], 'rid' => $admin_role_id]);
+                        $message .= "• Đã cấp quyền ADMIN cho tài khoản: `" . htmlspecialchars($fu['Email']) . "`<br>";
+                    }
+                }
+            }
+        }
+
         $status = 'success';
         $message = "<strong>Thiết lập cơ sở dữ liệu hoàn tất!</strong><br><br>" . $message;
     } catch (Exception $e) {
@@ -85,7 +123,7 @@ if (isset($_POST['setup'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cài Đặt Database - Google Login Demo</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
     <style>
         .container {

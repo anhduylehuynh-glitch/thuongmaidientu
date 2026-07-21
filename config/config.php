@@ -17,13 +17,16 @@ define('DB_NAME', 'thuongmaidientu');
 // CẤU HÌNH GOOGLE OAUTH 2.0
 // ============================================================================
 // HƯỚNG DẪN: Hãy thay thế bằng Client ID & Client Secret thực tế của bạn
-//fine('GOOGLE_CLIENT_ID', '');
-//fine('GOOGLE_CLIENT_SECRET', '');
+define('GOOGLE_CLIENT_ID', '387083096653-p1dpa5ml937fqe1tdefchcjohgh2p299.apps.googleusercontent.com');
+define('GOOGLE_CLIENT_SECRET', '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');
 
-// Đường dẫn nhận phản hồi (Redirect URI) từ Google (Tự động nhận diện cổng localhost của từng máy)
+// Đường dẫn nhận phản hồi (Redirect URI) từ Google (Tự động nhận diện cổng và đường dẫn linh hoạt)
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-define('GOOGLE_REDIRECT_URI', $protocol . '://' . $host . '/thuongmaidientu/callback.php');
+$scriptDir = dirname($_SERVER['SCRIPT_NAME'] ?? '');
+$basePath = ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') ? '' : rtrim(str_replace('\\', '/', $scriptDir), '/');
+
+define('GOOGLE_REDIRECT_URI', $protocol . '://' . $host . $basePath . '/callback.php');
 
 // ============================================================================
 // HÀM KẾT NỐI DATABASE DÙNG CHUNG (PDO)

@@ -118,8 +118,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đăng Nhập / Đăng Ký Hệ Thống</title>
-    <!-- Google Fonts Outfit -->
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Fonts Inter & Outfit -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="assets/css/style.css">
     <style>
         .container {
@@ -134,27 +134,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Background hiệu ứng mờ và vòng tròn màu sắc -->
     <div class="background-decor"></div>
 
-    <div class="container">
-        <div class="card">
+    <div class="site-wrapper">
+        <!-- Header / Navigation Bar -->
+        <header class="site-header">
+            <div class="nav-container">
+                <a href="index.php" class="brand-logo">
+                    Chợ Đồ Cũ
+                </a>
+                
+                <nav class="nav-menu">
+                    <a href="index.php" class="nav-link">Trang Chủ</a>
+                    <a href="#" class="nav-link">Sản Phẩm</a>
+                    <a href="post_product.php" class="nav-link" style="color: var(--primary); font-weight: 700;">Đăng Bán</a>
+                    <a href="login_page.php" class="btn btn-primary" style="padding: 8px 18px; font-size: 0.9rem; border-radius: 50px;">Đăng Nhập</a>
+                </nav>
+            </div>
+        </header>
+
+        <div class="container">
+            <div class="card">
             <!-- GIAO DIỆN ĐĂNG NHẬP / ĐĂNG KÝ -->
             <div style="text-align: center;">
-                <div style="display: inline-flex; padding: 12px; border-radius: 16px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2); margin-bottom: 20px;">
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 12 2 12 2ZM12 5C13.66 5 15 6.34 15 8C15 9.66 13.66 11 12 11C10.34 11 9 9.66 9 8C9 6.34 10.34 5 12 5ZM12 19.2C9.5 19.2 7.29 17.92 6 15.98C6.03 13.99 10 12.9 12 12.9C13.99 12.9 17.97 13.99 18 15.98C16.71 17.92 14.5 19.2 12 19.2Z" fill="#818cf8"/>
-                    </svg>
-                </div>
-                
                 <h1 style="margin-bottom: 20px;">Hệ Thống Đăng Nhập</h1>
 
                 <!-- Thông báo lỗi hoặc thành công -->
                 <?php if (!empty($error)): ?>
                     <div class="alert-message error">
-                        ⚠️ <?php echo htmlspecialchars($error); ?>
+                        <?php echo htmlspecialchars($error); ?>
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($success)): ?>
                     <div class="alert-message success">
-                        ✅ <?php echo htmlspecialchars($success); ?>
+                        <?php echo htmlspecialchars($success); ?>
                     </div>
                 <?php endif; ?>
 
@@ -213,21 +224,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <!-- Đường chia và nút Đăng nhập bằng Google -->
                 <div class="divider-container">Hoặc đăng nhập bằng</div>
 
-                <!-- Nút Đăng nhập Google chuẩn chính hãng -->
+                <!-- Nút Đăng nhập Google -->
                 <a href="login.php" class="btn-google">
-                    <!-- Biểu tượng chữ G chuẩn Google -->
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22Coloured%22_logo.svg" alt="Google Logo" onerror="this.src='https://developers.google.com/static/identity/images/g-logo.png'">
                     Đăng nhập bằng tài khoản Google
                 </a>
 
                 <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); font-size: 13px;">
                     <a href="index.php" style="color: var(--primary); text-decoration: none; font-weight: 500;">
-                        ← Quay lại Trang Chủ
+                        Quay lại Trang Chủ
                     </a>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-content">
+            <div class="footer-brand">Chợ Đồ Cũ</div>
+            <p class="footer-text">
+                Nền tảng mua bán đồ cũ trực tuyến hiện đại, kết nối thông minh và giao dịch an toàn với hệ thống điểm uy tín cao.
+            </p>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 10px;">
+                &copy; 2026 Chợ Đồ Cũ Inc. Bảo lưu mọi quyền.
+            </div>
+        </div>
+    </footer>
+</div>
 
     <script>
         function switchTab(tabName) {

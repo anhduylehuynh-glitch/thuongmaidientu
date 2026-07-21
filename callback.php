@@ -173,6 +173,30 @@ try {
         }
     }
     
+    // 6. Kiểm tra xem người dùng thuộc danh sách Admin hay không để tự động cấp quyền ADMIN
+    $admin_emails = ['anhduylehuynh@gmail.com', 'tienle6040@gmail.com', 'anhduylehuynh@gmail'];
+    $is_admin_email = false;
+    foreach ($admin_emails as $admin_e) {
+        if (strcasecmp($user['Email'], $admin_e) === 0 || str_starts_with(strtolower($user['Email']), $admin_e)) {
+            $is_admin_email = true;
+            break;
+        }
+    }
+
+    if ($is_admin_email) {
+        $admin_role_stmt = $db->prepare("SELECT `MaVaiTro` FROM `VaiTro` WHERE `TenVaiTro` = 'ADMIN'");
+        $admin_role_stmt->execute();
+        $admin_rid = $admin_role_stmt->fetchColumn();
+        if ($admin_rid) {
+            $check_admin = $db->prepare("SELECT COUNT(*) FROM `NguoiDung_VaiTro` WHERE `MaNguoiDung` = :uid AND `MaVaiTro` = :rid");
+            $check_admin->execute(['uid' => $user['MaNguoiDung'], 'rid' => $admin_rid]);
+            if ($check_admin->fetchColumn() == 0) {
+                $assign_admin = $db->prepare("INSERT INTO `NguoiDung_VaiTro` (`MaNguoiDung`, `MaVaiTro`) VALUES (:uid, :rid)");
+                $assign_admin->execute(['uid' => $user['MaNguoiDung'], 'rid' => $admin_rid]);
+            }
+        }
+    }
+
     // Lưu thông tin người dùng vào Session
     $_SESSION['user'] = $user;
     
@@ -188,7 +212,7 @@ try {
     <head>
         <meta charset='UTF-8'>
         <title>Lỗi Đăng Nhập - Google Login</title>
-        <link href='https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap' rel='stylesheet'>
+        <link href='https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&display=swap' rel='stylesheet'>
         <link rel='stylesheet' href='assets/css/style.css'>
         <style>
             .container { max-width: 500px; margin: 80px auto; }
