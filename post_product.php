@@ -199,11 +199,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             throw new Exception("Vui lòng điền đầy đủ các thông tin bắt buộc (Tên, Danh mục, Giá bán, Mô tả chi tiết).");
         }
 
-        // 3. Đăng sản phẩm vào bảng SanPham
+        // 3. Đăng sản phẩm vào bảng SanPham (Trạng thái mặc định: Chờ Admin kiểm duyệt b'00')
         $ins_prod = $db->prepare("INSERT INTO `SanPham` 
             (`MaNguoiBan`, `MaDanhMuc`, `TenSanPham`, `MoTaChiTiet`, `TinhTrang`, `KhoiLuong_Kg`, `GiaBan`, `VideoThucTe`, `TrangThaiDuyet`, `TrangThaiBan`) 
             VALUES 
-            (:seller_id, :cat_id, :title, :desc, :cond, :weight, :price, :video, b'01', b'00')");
+            (:seller_id, :cat_id, :title, :desc, :cond, :weight, :price, :video, b'00', b'00')");
 
         $ins_prod->execute([
             'seller_id' => $user_data['MaNguoiDung'],
@@ -227,7 +227,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
         }
 
-        $success = "Đăng bán sản phẩm thành công! Bài đăng đã sẵn sàng hiển thị trên trang chủ.";
+        $success = "Đăng bán sản phẩm thành công! Bài đăng của bạn đã gửi tới Admin và đang chờ kiểm duyệt trước khi hiển thị công khai trên trang chủ.";
 
     } catch (Exception $ex) {
         $error = $ex->getMessage();

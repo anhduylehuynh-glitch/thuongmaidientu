@@ -53,6 +53,27 @@ try {
 // Xử lý các thao tác Admin (POST / GET)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     try {
+        if ($_POST['action'] === 'approve_product' && isset($_POST['product_id'])) {
+            $pid = (int)$_POST['product_id'];
+            $st = $db->prepare("UPDATE `SanPham` SET `TrangThaiDuyet` = b'01' WHERE `MaSanPham` = :pid");
+            $st->execute(['pid' => $pid]);
+            $success = "Đã duyệt bài đăng #" . $pid . ". Sản phẩm đã sẵn sàng hiển thị trên trang chủ.";
+        }
+
+        if ($_POST['action'] === 'ban_product' && isset($_POST['product_id'])) {
+            $pid = (int)$_POST['product_id'];
+            $st = $db->prepare("UPDATE `SanPham` SET `TrangThaiDuyet` = b'10' WHERE `MaSanPham` = :pid");
+            $st->execute(['pid' => $pid]);
+            $success = "Đã cấm/từ chối sản phẩm #" . $pid . ". Bài đăng sẽ bị ẩn khỏi trang chủ.";
+        }
+
+        if ($_POST['action'] === 'pend_product' && isset($_POST['product_id'])) {
+            $pid = (int)$_POST['product_id'];
+            $st = $db->prepare("UPDATE `SanPham` SET `TrangThaiDuyet` = b'00' WHERE `MaSanPham` = :pid");
+            $st->execute(['pid' => $pid]);
+            $success = "Đã chuyển sản phẩm #" . $pid . " về trạng thái Chờ duyệt.";
+        }
+
         if ($_POST['action'] === 'toggle_product_status' && isset($_POST['product_id'])) {
             $pid = (int)$_POST['product_id'];
             $current_status = (int)$_POST['current_status'];
@@ -164,16 +185,23 @@ try {
     ";
     $user_list = $db->query($user_sql)->fetchAll();
 
-    // Lấy danh sách sản phẩm
+    // Lấy danh sách sản phẩm kèm ảnh và người bán
     $product_sql = "
-        SELECT sp.*, nd.HoTen as TenNguoiBan, dm.TenDanhMuc, ha.DuongDanAnh
+        SELECT sp.*, nd.HoTen as TenNguoiBan, nd.DiemUyTin, dm.TenDanhMuc
         FROM `SanPham` sp
         JOIN `NguoiDung` nd ON sp.MaNguoiBan = nd.MaNguoiDung
         JOIN `DanhMuc` dm ON sp.MaDanhMuc = dm.MaDanhMuc
-        LEFT JOIN `HinhAnhSP` ha ON sp.MaSanPham = ha.MaSanPham AND ha.AnhChinh = 1
         ORDER BY sp.NgayDang DESC
     ";
     $product_list = $db->query($product_sql)->fetchAll();
+
+    foreach ($product_list as &$p) {
+        $img_st = $db->prepare("SELECT DuongDanAnh FROM HinhAnhSP WHERE MaSanPham = :pid ORDER BY AnhChinh DESC, MaHinhAnh ASC");
+        $img_st->execute(['pid' => $p['MaSanPham']]);
+        $p['Images'] = $img_st->fetchAll(PDO::FETCH_COLUMN);
+        $p['DuongDanAnh'] = !empty($p['Images']) ? $p['Images'][0] : '';
+    }
+    unset($p);
 
     // Lấy danh sách danh mục kèm số sản phẩm
     $category_sql = "
@@ -454,7 +482,7 @@ try {
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>Tên Sản Phẩm</th>
+                                <th>Sản Phẩm</th>
                                 <th>Danh Mục</th>
                                 <th>Giá Bán</th>
                                 <th>Người Bán</th>
@@ -470,39 +498,64 @@ try {
                             <?php else: ?>
                                 <?php foreach ($product_list as $p): ?>
                                     <?php 
-                                        $is_approved = ord($p['TrangThaiDuyet'] ?? "\x00") === 1;
+                                        $st_val = ord($p['TrangThaiDuyet'] ?? "\x00");
+                                        $img_json = htmlspecialchars(json_encode($p['Images'] ?? []), ENT_QUOTES, 'UTF-8');
+                                        $vid_path = htmlspecialchars($p['VideoThucTe'] ?? '', ENT_QUOTES, 'UTF-8');
                                     ?>
                                     <tr>
                                         <td>#<?php echo $p['MaSanPham']; ?></td>
                                         <td>
-                                            <strong><?php echo htmlspecialchars($p['TenSanPham']); ?></strong>
-                                            <div style="font-size: 0.8rem; color: var(--text-muted);"><?php echo htmlspecialchars($p['TinhTrang']); ?></div>
+                                            <div style="display: flex; align-items: center; gap: 12px;">
+                                                <?php if (!empty($p['DuongDanAnh'])): ?>
+                                                    <img src="<?php echo htmlspecialchars($p['DuongDanAnh']); ?>" alt="Img" style="width: 44px; height: 44px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0;">
+                                                <?php else: ?>
+                                                    <div style="width: 44px; height: 44px; background: #f1f5f9; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #64748b;">No img</div>
+                                                <?php endif; ?>
+                                                <div>
+                                                    <strong style="display: block; font-size: 0.95rem; color: var(--text-main);"><?php echo htmlspecialchars($p['TenSanPham']); ?></strong>
+                                                    <span style="font-size: 0.8rem; color: var(--text-muted);"><?php echo htmlspecialchars($p['TinhTrang']); ?></span>
+                                                </div>
+                                            </div>
                                         </td>
                                         <td><?php echo htmlspecialchars($p['TenDanhMuc']); ?></td>
-                                        <td><strong style="color: var(--primary);"><?php echo number_format($p['GiaBan'], 0, ',', '.'); ?> đ</strong></td>
-                                        <td><?php echo htmlspecialchars($p['TenNguoiBan']); ?></td>
+                                        <td><strong style="color: var(--primary); font-weight: 700;"><?php echo number_format($p['GiaBan'], 0, ',', '.'); ?> đ</strong></td>
                                         <td>
-                                            <?php if ($is_approved): ?>
-                                                <span class="badge badge-success">Đã duyệt</span>
+                                            <strong><?php echo htmlspecialchars($p['TenNguoiBan']); ?></strong>
+                                            <div style="font-size: 0.75rem; color: #d97706;"><?php echo $p['DiemUyTin']; ?> Uy Tín</div>
+                                        </td>
+                                        <td>
+                                            <?php if ($st_val === 1): ?>
+                                                <span class="badge badge-success">✓ Đã duyệt</span>
+                                            <?php elseif ($st_val === 2): ?>
+                                                <span class="badge badge-danger">🚫 Đã cấm/Từ chối</span>
                                             <?php else: ?>
-                                                <span class="badge badge-warning">Chờ duyệt</span>
+                                                <span class="badge badge-warning">⏳ Chờ duyệt</span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <div style="display: flex; gap: 8px;">
-                                                <form method="POST" style="display: inline;">
-                                                    <input type="hidden" name="action" value="toggle_product_status">
-                                                    <input type="hidden" name="product_id" value="<?php echo $p['MaSanPham']; ?>">
-                                                    <input type="hidden" name="current_status" value="<?php echo $is_approved ? 1 : 0; ?>">
-                                                    <button type="submit" class="btn-action" style="background: <?php echo $is_approved ? '#fef3c7; color: #b45309;' : '#dcfce7; color: #15803d;'; ?>">
-                                                        <?php echo $is_approved ? 'Ẩn sản phẩm' : 'Duyệt bài'; ?>
-                                                    </button>
-                                                </form>
+                                            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                                                <button type="button" class="btn-action" style="background: #e0f2fe; color: #0369a1;" onclick="openAdminProductModal(<?php echo $p['MaSanPham']; ?>, '<?php echo addslashes(htmlspecialchars($p['TenSanPham'])); ?>', '<?php echo number_format($p['GiaBan'], 0, ',', '.'); ?> đ', '<?php echo addslashes(htmlspecialchars($p['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($p['TinhTrang'])); ?>', '<?php echo addslashes(htmlspecialchars($p['TenNguoiBan'])); ?>', '<?php echo $p['DiemUyTin']; ?>', '<?php echo addslashes(htmlspecialchars($p['MoTaChiTiet'] ?? 'Chưa có mô tả')); ?>', '<?php echo $img_json; ?>', '<?php echo $vid_path; ?>', <?php echo $st_val; ?>)">Xem</button>
 
-                                                <form method="POST" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa sản phẩm này?');">
+                                                <?php if ($st_val !== 1): ?>
+                                                    <form method="POST" style="display: inline;">
+                                                        <input type="hidden" name="action" value="approve_product">
+                                                        <input type="hidden" name="product_id" value="<?php echo $p['MaSanPham']; ?>">
+                                                        <button type="submit" class="btn-action" style="background: #dcfce7; color: #15803d;">Duyệt bài</button>
+                                                    </form>
+                                                <?php endif; ?>
+
+                                                <?php if ($st_val !== 2): ?>
+                                                    <form method="POST" style="display: inline;">
+                                                        <input type="hidden" name="action" value="ban_product">
+                                                        <input type="hidden" name="product_id" value="<?php echo $p['MaSanPham']; ?>">
+                                                        <button type="submit" class="btn-action" style="background: #fee2e2; color: #b91c1c;">Cấm bài</button>
+                                                    </form>
+                                                <?php endif; ?>
+
+                                                <form method="POST" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa sản phẩm này khỏi CSDL?');">
                                                     <input type="hidden" name="action" value="delete_product">
                                                     <input type="hidden" name="product_id" value="<?php echo $p['MaSanPham']; ?>">
-                                                    <button type="submit" class="btn-action" style="background: #fee2e2; color: #b91c1c;">Xóa</button>
+                                                    <button type="submit" class="btn-action" style="background: #f1f5f9; color: #475569;">Xóa</button>
                                                 </form>
                                             </div>
                                         </td>
@@ -669,6 +722,52 @@ try {
                     </form>
                 </div>
             </div>
+            <!-- Modal Admin Xem Chi Tiết Kiểm Duyệt Sản Phẩm -->
+            <div id="adminProductModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); z-index: 1000; align-items: center; justify-content: center; padding: 20px;">
+                <div style="background: #ffffff; width: 100%; max-width: 820px; max-height: 90vh; overflow-y: auto; border-radius: 24px; padding: 30px; box-shadow: 0 25px 50px rgba(0,0,0,0.25); position: relative;">
+                    <button onclick="closeAdminProductModal()" style="position: absolute; top: 20px; right: 20px; background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">✕</button>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <!-- Gallery Media Bên Trái -->
+                        <div>
+                            <div id="admin_modal_media_box" style="width: 100%; aspect-ratio: 16 / 9; border-radius: 16px; overflow: hidden; background: #000000; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; position: relative;">
+                                <img id="admin_modal_img" src="" alt="Large" style="width: 100%; height: 100%; object-fit: contain;">
+                                <video id="admin_modal_video" controls style="width: 100%; height: 100%; display: none; background: #000000; object-fit: contain;"></video>
+                            </div>
+                            <div id="admin_modal_thumb_strip" style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;"></div>
+                        </div>
+
+                        <!-- Thông Tin Kiểm Duyệt Bên Phải -->
+                        <div>
+                            <span id="admin_modal_cat" class="badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700; margin-bottom: 8px; display: inline-block;"></span>
+                            <h2 id="admin_modal_title" style="font-size: 1.4rem; color: var(--text-main); margin-bottom: 8px;"></h2>
+                            <div id="admin_modal_price" style="font-size: 1.5rem; font-weight: 800; color: var(--primary); margin-bottom: 14px;"></div>
+
+                            <div style="background: rgba(248, 250, 252, 0.8); border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 0.85rem;">
+                                <div>Tình trạng: <b id="admin_modal_cond" style="color: var(--text-main);"></b></div>
+                                <div style="margin-top: 4px;">Người bán: <b id="admin_modal_seller" style="color: var(--text-main);"></b> (<span id="admin_modal_rep" style="color: #d97706; font-weight: 700;"></span> Uy Tín)</div>
+                            </div>
+
+                            <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 6px;">Mô tả sản phẩm:</h4>
+                            <div id="admin_modal_desc" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; white-space: pre-line; max-height: 140px; overflow-y: auto; margin-bottom: 16px;"></div>
+
+                            <!-- Nút Thao Tác Duyệt / Cấm -->
+                            <div style="display: flex; gap: 10px;">
+                                <form method="POST" action="admin.php" style="flex: 1;">
+                                    <input type="hidden" name="action" value="approve_product">
+                                    <input type="hidden" name="product_id" id="admin_modal_pid_approve">
+                                    <button type="submit" class="btn" style="background: #16a34a; color: #fff; width: 100%; border-radius: 12px; padding: 10px; font-weight: 700;">✓ Duyệt Cho Bán</button>
+                                </form>
+                                <form method="POST" action="admin.php" style="flex: 1;">
+                                    <input type="hidden" name="action" value="ban_product">
+                                    <input type="hidden" name="product_id" id="admin_modal_pid_ban">
+                                    <button type="submit" class="btn" style="background: #dc2626; color: #fff; width: 100%; border-radius: 12px; padding: 10px; font-weight: 700;">🚫 Cấm Bài Đăng</button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </main>
 
         <!-- Footer -->
@@ -703,6 +802,82 @@ try {
 
         function closeEditCatModal() {
             document.getElementById('editCatModal').style.display = 'none';
+        }
+
+        function openAdminProductModal(pid, title, price, cat, cond, seller, rep, desc, imagesJson, videoPath, stVal) {
+            document.getElementById('admin_modal_pid_approve').value = pid;
+            document.getElementById('admin_modal_pid_ban').value = pid;
+            document.getElementById('admin_modal_title').textContent = title;
+            document.getElementById('admin_modal_price').textContent = price;
+            document.getElementById('admin_modal_cat').textContent = cat;
+            document.getElementById('admin_modal_cond').textContent = cond;
+            document.getElementById('admin_modal_seller').textContent = seller;
+            document.getElementById('admin_modal_rep').textContent = rep;
+            document.getElementById('admin_modal_desc').textContent = desc;
+
+            const largeImg = document.getElementById('admin_modal_img');
+            const largeVideo = document.getElementById('admin_modal_video');
+            const thumbStrip = document.getElementById('admin_modal_thumb_strip');
+
+            thumbStrip.innerHTML = '';
+            largeVideo.style.display = 'none';
+            largeVideo.pause();
+            largeImg.style.display = 'block';
+
+            let images = [];
+            try {
+                images = JSON.parse(imagesJson);
+            } catch(e) {}
+
+            if (images.length > 0) {
+                largeImg.src = images[0];
+            } else {
+                largeImg.src = '';
+            }
+
+            images.forEach((imgUrl, i) => {
+                const thumb = document.createElement('img');
+                thumb.src = imgUrl;
+                thumb.style.cssText = 'width: 50px; height: 50px; object-fit: cover; border-radius: 8px; cursor: pointer; border: ' + (i === 0 ? '2px solid #0284c7' : '1px solid #cbd5e1') + '; opacity: ' + (i === 0 ? '1' : '0.7') + '; transition: all 0.2s;';
+                thumb.onclick = function() {
+                    largeVideo.style.display = 'none';
+                    largeVideo.pause();
+                    largeImg.style.display = 'block';
+                    largeImg.src = imgUrl;
+                    Array.from(thumbStrip.children).forEach(t => { t.style.border = '1px solid #cbd5e1'; t.style.opacity = '0.7'; });
+                    thumb.style.border = '2px solid #0284c7';
+                    thumb.style.opacity = '1';
+                };
+                thumbStrip.appendChild(thumb);
+            });
+
+            if (videoPath) {
+                const vidBtn = document.createElement('div');
+                vidBtn.style.cssText = 'width: 50px; height: 50px; border-radius: 8px; cursor: pointer; border: 1px solid #cbd5e1; background: #0f172a; color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; opacity: 0.85;';
+                vidBtn.textContent = 'VIDEO';
+
+                vidBtn.onclick = function() {
+                    largeImg.style.display = 'none';
+                    largeVideo.style.display = 'block';
+                    largeVideo.src = videoPath;
+                    largeVideo.play();
+                    Array.from(thumbStrip.children).forEach(t => { t.style.border = '1px solid #cbd5e1'; t.style.opacity = '0.7'; });
+                    vidBtn.style.border = '2px solid #0284c7';
+                    vidBtn.style.opacity = '1';
+                };
+                thumbStrip.appendChild(vidBtn);
+            }
+
+            document.getElementById('adminProductModal').style.display = 'flex';
+        }
+
+        function closeAdminProductModal() {
+            const videoPlayer = document.getElementById('admin_modal_video');
+            if (videoPlayer) {
+                videoPlayer.pause();
+                videoPlayer.src = '';
+            }
+            document.getElementById('adminProductModal').style.display = 'none';
         }
 
         const trigger = document.getElementById('userDropdownTrigger');
