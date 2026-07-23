@@ -17,8 +17,8 @@ define('DB_NAME', 'thuongmaidientu');
 // CẤU HÌNH GOOGLE OAUTH 2.0
 // ============================================================================
 // HƯỚNG DẪN: Hãy thay thế bằng Client ID & Client Secret thực tế của bạn
-define('GOOGLE_CLIENT_ID', '387083096653-p1dpa5ml937fqe1tdefchcjohgh2p299.apps.googleusercontent.com');
-define('GOOGLE_CLIENT_SECRET', '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');
+//define('GOOGLE_CLIENT_ID', 'you');
+//define('GOOGLE_CLIENT_SECRET', 'tou');
 
 // Đường dẫn nhận phản hồi (Redirect URI) từ Google (Tự động nhận diện cổng và đường dẫn linh hoạt)
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
