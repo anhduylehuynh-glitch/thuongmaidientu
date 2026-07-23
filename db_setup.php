@@ -109,6 +109,38 @@ if (isset($_POST['setup'])) {
             }
         }
 
+        // Chạy file migration_security.sql nếu tồn tại
+        $migration_file = __DIR__ . '/migration_security.sql';
+        if (file_exists($migration_file)) {
+            $migration_sql = file_get_contents($migration_file);
+            $pdo->exec($migration_sql);
+            $message .= "• Thực thi file migration bảo mật `migration_security.sql` thành công.<br>";
+        }
+
+        // Tạo các chỉ mục phụ (Secondary Indexes) nếu chưa tồn tại
+        $queries = [
+            'idx_sp_duyet_ban_ngaydang' => "CREATE INDEX idx_sp_duyet_ban_ngaydang ON SanPham(TrangThaiDuyet, TrangThaiBan, NgayDang)",
+            'idx_sp_danhmuc_trangthai' => "CREATE INDEX idx_sp_danhmuc_trangthai ON SanPham(MaDanhMuc, TrangThaiDuyet, TrangThaiBan)",
+            'idx_sp_nguoiban_ngaydang' => "CREATE INDEX idx_sp_nguoiban_ngaydang ON SanPham(MaNguoiBan, NgayDang)"
+        ];
+
+        foreach ($queries as $name => $sql) {
+            $check = $pdo->prepare("
+                SELECT COUNT(*) 
+                FROM INFORMATION_SCHEMA.STATISTICS 
+                WHERE TABLE_SCHEMA = DATABASE() 
+                  AND TABLE_NAME = 'SanPham' 
+                  AND INDEX_NAME = :name
+            ");
+            $check->execute(['name' => $name]);
+            if ($check->fetchColumn() == 0) {
+                $pdo->exec($sql);
+                $message .= "• Tạo chỉ mục phụ `$name` tối ưu truy vấn thành công.<br>";
+            } else {
+                $message .= "• Chỉ mục phụ `$name` đã tồn tại sẵn.<br>";
+            }
+        }
+
         $status = 'success';
         $message = "<strong>Thiết lập cơ sở dữ liệu hoàn tất!</strong><br><br>" . $message;
     } catch (Exception $e) {

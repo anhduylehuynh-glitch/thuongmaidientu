@@ -2,12 +2,12 @@
 require_once 'config/config.php';
 
 // Nếu đã đăng nhập thì chuyển hướng thẳng về trang chủ
-if (isset($_SESSION['user'])) {
+if (isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit;
 }
 
-$error = '';
+$error = $_GET['error'] ?? '';
 $success = '';
 
 // Xử lý gửi Form đăng ký / đăng nhập thông thường
@@ -19,22 +19,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($username_or_email) || empty($password)) {
             $error = 'Vui lòng nhập đầy đủ tên đăng nhập/email và mật khẩu.';
         } else {
-            try {
-                $db = getDBConnection();
-                $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `TenDangNhap` = :login OR `Email` = :email");
-                $stmt->execute(['login' => $username_or_email, 'email' => $username_or_email]);
-                $user = $stmt->fetch();
+            // Kiểm tra chống brute-force trước
+            if (!checkBruteForce($username_or_email)) {
+                $error = 'Tài khoản của bạn đã bị tạm khóa đăng nhập 15 phút do thử sai quá 5 lần.';
+                writeSecurityLog("Brute-force lockout triggered for identifier: " . $username_or_email);
+            } else {
+                try {
+                    $db = getDBConnection();
+                    $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `TenDangNhap` = :login OR `Email` = :email");
+                    $stmt->execute(['login' => $username_or_email, 'email' => $username_or_email]);
+                    $user = $stmt->fetch();
 
-                if ($user && !empty($user['MatKhau']) && password_verify($password, $user['MatKhau'])) {
-                    // Đăng nhập thành công
-                    $_SESSION['user'] = $user;
-                    header("Location: index.php");
-                    exit;
-                } else {
-                    $error = 'Tên đăng nhập/Email hoặc mật khẩu không chính xác.';
+                    // Kiểm tra trạng thái hoạt động của tài khoản
+                    $is_active = false;
+                    if ($user) {
+                        $status_val = $user['TrangThaiTaiKhoan'] ?? null;
+                        if (is_null($status_val)) {
+                            $is_active = true;
+                        } elseif (is_int($status_val)) {
+                            $is_active = $status_val === 1;
+                        } elseif (is_string($status_val)) {
+                            if (strlen($status_val) === 1) {
+                                $is_active = (ord($status_val) === 1 || $status_val === '1');
+                            } else {
+                                $is_active = ($status_val === '1');
+                            }
+                        } else {
+                            $is_active = (bool)$status_val;
+                        }
+                    }
+
+                    if ($user && $is_active && !empty($user['MatKhau']) && password_verify($password, $user['MatKhau'])) {
+                        // Đăng nhập thành công, xóa lịch sử sai
+                        clearFailedLogins($username_or_email);
+
+                        // Chống Session Fixation
+                        session_regenerate_id(true);
+
+                        $_SESSION['user_id'] = $user['MaNguoiDung'];
+                        $_SESSION['user'] = $user;
+                        $_SESSION['login_time'] = time();
+                        $_SESSION['last_activity'] = time();
+
+                        writeSecurityLog("User ID " . $user['MaNguoiDung'] . " logged in successfully");
+
+                        $redirect = $_GET['redirect'] ?? 'index.php';
+                        $allowed_redirects = ['index.php', 'post_product.php', 'profile.php', 'seller.php', 'admin.php'];
+                        $parsed = parse_url($redirect);
+                        $path = basename($parsed['path'] ?? '');
+                        if (!in_array($path, $allowed_redirects)) {
+                            $redirect = 'index.php';
+                        }
+                        header("Location: " . $redirect);
+                        exit;
+                    } else {
+                        // Ghi nhận đăng nhập thất bại để chống brute-force
+                        recordFailedLogin($username_or_email);
+                        writeSecurityLog("Failed login attempt for: " . $username_or_email);
+
+                        $error = 'Thông tin đăng nhập không chính xác.';
+                    }
+                } catch (Exception $e) {
+                    $error = 'Lỗi hệ thống, vui lòng thử lại sau.';
                 }
-            } catch (Exception $e) {
-                $error = 'Lỗi hệ thống: ' . $e->getMessage();
             }
         }
     } elseif (isset($_POST['action_register'])) {
@@ -99,10 +146,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Tự động đăng nhập
                     $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
                     $stmt->execute(['id' => $new_user_id]);
-                    $_SESSION['user'] = $stmt->fetch();
+                    $user = $stmt->fetch();
+
+                    // Chống Session Fixation
+                    session_regenerate_id(true);
+
+                    $_SESSION['user_id'] = $user['MaNguoiDung'];
+                    $_SESSION['user'] = $user;
+                    $_SESSION['login_time'] = time();
+                    $_SESSION['last_activity'] = time();
+
+                    writeSecurityLog("User ID " . $user['MaNguoiDung'] . " registered and logged in successfully");
 
                     $success = 'Đăng ký tài khoản thành công!';
-                    header("Location: index.php");
+                    $redirect = $_GET['redirect'] ?? 'index.php';
+                    $allowed_redirects = ['index.php', 'post_product.php', 'profile.php', 'seller.php', 'admin.php'];
+                    $parsed = parse_url($redirect);
+                    $path = basename($parsed['path'] ?? '');
+                    if (!in_array($path, $allowed_redirects)) {
+                        $redirect = 'index.php';
+                    }
+                    header("Location: " . $redirect);
                     exit;
                 }
             } catch (Exception $e) {
@@ -177,7 +241,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <!-- Form Đăng Nhập -->
                 <div id="login-view" class="form-view active">
-                    <form method="POST" action="login_page.php">
+                    <form method="POST" action="login_page.php<?php echo isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                         <div class="form-group">
                             <label for="login_username">Tên đăng nhập hoặc Email</label>
                             <input type="text" name="username_or_email" id="login_username" class="form-control" placeholder="Nhập tên đăng nhập hoặc email" required>
@@ -192,7 +257,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <!-- Form Đăng Ký -->
                 <div id="register-view" class="form-view">
-                    <form method="POST" action="login_page.php">
+                    <form method="POST" action="login_page.php<?php echo isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                         <div class="form-group">
                             <label for="reg_fullname">Họ và tên <span style="color:var(--error)">*</span></label>
                             <input type="text" name="fullname" id="reg_fullname" class="form-control" placeholder="Nguyễn Văn A" required>
@@ -225,7 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="divider-container">Hoặc đăng nhập bằng</div>
 
                 <!-- Nút Đăng nhập Google -->
-                <a href="login.php" class="btn-google">
+                <a href="login.php<?php echo isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''; ?>" class="btn-google">
                     Đăng nhập bằng tài khoản Google
                 </a>
 

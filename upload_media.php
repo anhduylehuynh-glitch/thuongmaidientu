@@ -3,7 +3,7 @@ require_once 'config/config.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['user'])) {
+if (!isset($_SESSION['user_id'])) {
     echo json_encode(['success' => false, 'message' => 'Vui lòng đăng nhập tài khoản.']);
     exit;
 }

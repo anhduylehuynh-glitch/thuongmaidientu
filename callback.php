@@ -42,10 +42,10 @@ try {
         throw new Exception("Yêu cầu không hợp lệ. Thiếu mã code hoặc state.");
     }
     
-    // 2. Xác thực State để chống tấn công CSRF
-    if (empty($_GET['state']) || ($_GET['state'] !== $_SESSION['oauth2state'])) {
+    // 2. Xác thực State để chống tấn công CSRF bằng hash_equals
+    if (empty($_SESSION['oauth2state']) || empty($_GET['state']) || !hash_equals($_SESSION['oauth2state'], $_GET['state'])) {
         unset($_SESSION['oauth2state']);
-        throw new Exception("Xác thực State thất bại. Có thể đây là một cuộc tấn công CSRF.");
+        throw new Exception("Xác thực State thất bại. Phiên làm việc đã hết hạn hoặc có nguy cơ bị tấn công CSRF.");
     }
     
     // Xóa state sau khi xác thực xong
@@ -53,7 +53,7 @@ try {
     
     $code = $_GET['code'];
     
-    // 3. Trao đổi Authorization Code lấy Access Token
+    // 3. Trao đổi Authorization Code lấy Access Token & ID Token
     $token_url = 'https://oauth2.googleapis.com/token';
     $token_params = [
         'code'          => $code,
@@ -69,23 +69,44 @@ try {
         throw new Exception("Lỗi lấy Token từ Google: " . $token_data['error_description']);
     }
     
-    $access_token = $token_data['access_token'];
-    
-    // 4. Gọi API Google để lấy thông tin cá nhân (Profile User)
-    $profile_url = 'https://www.googleapis.com/oauth2/v3/userinfo';
-    $headers = ["Authorization: Bearer " . $access_token];
-    
-    $profile_data = makeHttpRequest($profile_url, 'GET', [], $headers);
-    
-    if (isset($profile_data['error'])) {
-        throw new Exception("Lỗi lấy thông tin Profile từ Google: " . $profile_data['error']['message']);
+    $id_token = $token_data['id_token'] ?? '';
+    if (empty($id_token)) {
+        throw new Exception("Không nhận được ID Token từ Google.");
     }
     
-    // Thông tin người dùng nhận được từ Google
-    $google_id = $profile_data['sub'];
-    $email = $profile_data['email'];
-    $name = $profile_data['name'];
-    $picture = isset($profile_data['picture']) ? $profile_data['picture'] : '';
+    // 4. Xác thực ID Token trực tiếp từ backend Google qua tokeninfo
+    $tokeninfo_url = 'https://oauth2.googleapis.com/tokeninfo';
+    $tokeninfo_data = makeHttpRequest($tokeninfo_url, 'GET', ['id_token' => $id_token]);
+    
+    if (isset($tokeninfo_data['error'])) {
+        throw new Exception("Xác thực ID Token thất bại: " . $tokeninfo_data['error_description']);
+    }
+    
+    // Kiểm tra Issuer (iss), Audience (aud) và Expiration (exp)
+    $iss = $tokeninfo_data['iss'] ?? '';
+    if ($iss !== 'https://accounts.google.com' && $iss !== 'accounts.google.com') {
+        throw new Exception("Issuer của ID Token không hợp lệ.");
+    }
+    
+    $aud = $tokeninfo_data['aud'] ?? '';
+    if ($aud !== GOOGLE_CLIENT_ID) {
+        throw new Exception("Audience của ID Token không khớp.");
+    }
+    
+    $exp = (int)($tokeninfo_data['exp'] ?? 0);
+    if ($exp < time()) {
+        throw new Exception("ID Token đã hết hạn.");
+    }
+    
+    // Không tin email hoặc dữ liệu từ client, lấy trực tiếp từ ID Token đã xác thực
+    $google_id = $tokeninfo_data['sub'] ?? '';
+    $email = $tokeninfo_data['email'] ?? '';
+    $name = $tokeninfo_data['name'] ?? '';
+    $picture = $tokeninfo_data['picture'] ?? '';
+    
+    if (empty($google_id) || empty($email)) {
+        throw new Exception("Không thể trích xuất Google ID hoặc Email từ Token.");
+    }
     
     // 5. Kết nối Database & Xử lý đăng nhập / đăng ký
     $db = getDBConnection();
@@ -174,7 +195,7 @@ try {
     }
     
     // 6. Kiểm tra xem người dùng thuộc danh sách Admin hay không để tự động cấp quyền ADMIN
-    $admin_emails = ['anhduylehuynh@gmail.com', 'tienle6040@gmail.com', 'anhduylehuynh@gmail'];
+    $admin_emails = ['anhduylehuynh@gmail.com', 'tienle6040@gmail.com', 'anhduylehuynh@gmail', 'minhon231564897@gmail.com'];
     $is_admin_email = false;
     foreach ($admin_emails as $admin_e) {
         if (strcasecmp($user['Email'], $admin_e) === 0 || str_starts_with(strtolower($user['Email']), $admin_e)) {
@@ -197,11 +218,53 @@ try {
         }
     }
 
+    // Kiểm tra trạng thái hoạt động của tài khoản
+    $status_val = $user['TrangThaiTaiKhoan'] ?? null;
+    $is_active = false;
+    if (is_null($status_val)) {
+        $is_active = true;
+    } elseif (is_int($status_val)) {
+        $is_active = $status_val === 1;
+    } elseif (is_string($status_val)) {
+        if (strlen($status_val) === 1) {
+            $is_active = (ord($status_val) === 1 || $status_val === '1');
+        } else {
+            $is_active = ($status_val === '1');
+        }
+    } else {
+        $is_active = (bool)$status_val;
+    }
+
+    if (!$is_active) {
+        writeSecurityLog("Google OAuth login block: User ID " . $user['MaNguoiDung'] . " is locked.");
+        header("Location: login_page.php?error=" . urlencode("Tài khoản của bạn đã bị khóa bởi quản trị viên."));
+        exit;
+    }
+
+    // Chống Session Fixation
+    session_regenerate_id(true);
+
     // Lưu thông tin người dùng vào Session
+    $_SESSION['user_id'] = $user['MaNguoiDung'];
     $_SESSION['user'] = $user;
-    
-    // Chuyển hướng về trang chủ
-    header('Location: index.php');
+    $_SESSION['login_time'] = time();
+    $_SESSION['last_activity'] = time();
+
+    writeSecurityLog("User ID " . $user['MaNguoiDung'] . " logged in via Google OAuth successfully");
+
+    // Chỉ redirect về các URL nội bộ được cho phép để chống Open Redirect
+    $redirect_url = 'index.php';
+    if (!empty($_SESSION['oauth_redirect'])) {
+        $allowed_redirects = ['index.php', 'post_product.php', 'profile.php', 'seller.php', 'admin.php'];
+        $parsed = parse_url($_SESSION['oauth_redirect']);
+        $path = basename($parsed['path'] ?? '');
+        if (in_array($path, $allowed_redirects)) {
+            $redirect_url = $_SESSION['oauth_redirect'];
+        }
+        unset($_SESSION['oauth_redirect']);
+    }
+
+    header('Location: ' . $redirect_url);
     exit;
     
 } catch (Exception $e) {

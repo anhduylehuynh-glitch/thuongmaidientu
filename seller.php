@@ -6,11 +6,12 @@ $user_data = null;
 $user_roles = [];
 
 // Kiểm tra trạng thái đăng nhập của người xem
-if (isset($_SESSION['user'])) {
+if (isset($_SESSION['user_id'])) {
     try {
         $db = getDBConnection();
+        $user_id = $_SESSION['user_id'];
         $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
-        $stmt->execute(['id' => $_SESSION['user']['MaNguoiDung']]);
+        $stmt->execute(['id' => $user_id]);
         $user_data = $stmt->fetch();
         if ($user_data) {
             $is_logged_in = true;
@@ -22,10 +23,13 @@ if (isset($_SESSION['user'])) {
             ");
             $role_stmt->execute(['id' => $user_data['MaNguoiDung']]);
             $user_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
+        } else {
+            $_SESSION = [];
+            session_destroy();
         }
     } catch (Exception $e) {
         $is_logged_in = true;
-        $user_data = $_SESSION['user'];
+        $user_data = $_SESSION['user'] ?? null;
     }
 }
 
@@ -296,7 +300,7 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
                                 <a href="profile.php" class="dropdown-item">Hồ sơ cá nhân</a>
                                 <a href="post_product.php" class="dropdown-item" style="color: var(--primary);">Đăng bán sản phẩm</a>
                                 <div class="dropdown-divider"></div>
-                                <a href="logout.php" class="dropdown-item" style="color: var(--error)">Đăng xuất</a>
+                                 <a href="javascript:void(0)" onclick="const f = document.createElement('form'); f.method = 'POST'; f.action = 'logout.php'; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'csrf_token'; i.value = '<?php echo getCsrfToken(); ?>'; f.appendChild(i); document.body.appendChild(f); f.submit();" class="dropdown-item" style="color: var(--error)">Đăng xuất</a>
                             </div>
                         </div>
                     <?php else: ?>
@@ -619,6 +623,16 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
             }
             document.getElementById('productDetailModal').style.display = 'none';
         }
+        // Tự động thêm CSRF Token vào tất cả các form POST
+        document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(form => {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = '<?php echo getCsrfToken(); ?>';
+                form.appendChild(input);
+            }
+        });
     </script>
 </body>
 

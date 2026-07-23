@@ -1,0 +1,26 @@
+[2026-07-23 06:59:30] [IP: ::1] User ID 2 registered and logged in successfully
+[2026-07-23 07:07:42] [IP: ::1] User ID 2 logged out successfully
+[2026-07-23 07:21:25] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 09:19:21] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-07-23 09:19:29] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 09:36:45] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-07-23 09:36:53] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 09:58:24] [IP: ::1] Google OAuth login block: User ID 1 is locked.
+[2026-07-23 09:58:38] [IP: ::1] Google OAuth login block: User ID 1 is locked.
+[2026-07-23 09:59:56] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 10:19:40] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-07-23 10:20:33] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 10:48:10] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-07-23 10:48:27] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 11:31:09] [IP: ::1] Google OAuth login block: User ID 1 is locked.
+[2026-07-23 11:31:40] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-23 12:01:29] [IP: ::1] Failed login attempt for: admin
+[2026-07-23 12:02:03] [IP: ::1] Failed login attempt for: admin
+[2026-07-23 12:02:52] [IP: ::1] Failed login attempt for: admin
+[2026-07-23 12:04:34] [IP: ::1] Failed login attempt for: admin
+[2026-07-23 12:05:08] [IP: ::1] Failed login attempt for: admin@gmail.com
+[2026-07-23 12:06:50] [IP: ::1] User ID 3 registered and logged in successfully
+[2026-07-23 12:06:58] [IP: ::1] Unauthorized access attempt to admin.php by User ID 3
+[2026-07-23 12:07:23] [IP: ::1] User ID 3 logged out successfully
+[2026-07-23 12:12:11] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-07-23 12:12:21] [IP: ::1] User ID 1 logged in via Google OAuth successfully
