@@ -42,6 +42,14 @@
 [2026-07-24 04:32:38] [IP: ::1] User ID 1 logged out successfully
 [2026-07-24 04:32:45] [IP: ::1] Google OAuth login block: User ID 6 is locked.
 [2026-07-24 04:33:12] [IP: ::1] User ID 1 logged in via Google OAuth successfully
-[2026-07-27 08:32:20] [IP: ::1] User ID 1 logged in via Google OAuth successfully
-[2026-07-27 08:34:12] [IP: ::1] User ID 1 logged out successfully
-[2026-07-27 08:34:32] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-27 06:30:21] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-27 06:32:41] [IP: ::1] User ID 1 logged out successfully
+[2026-07-27 06:32:54] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-27 08:39:40] [IP: ::1] User ID 1 logged out successfully
+[2026-07-27 06:44:51] [IP: ::1] User ID 1 logged out successfully
+[2026-07-27 06:44:58] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-27 08:46:29] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-27 09:06:38] [IP: ::1] User ID 1 logged in successfully
+[2026-07-27 09:07:35] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-07-27 09:07:48] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-27 09:10:56] [IP: ::1] User ID 1 logged in successfully

@@ -67,6 +67,14 @@ $basePath = ($scriptDir === '/' || $scriptDir === '\\' || $scriptDir === '.') ? 
 
 define('GOOGLE_REDIRECT_URI', $protocol . '://' . $host . $basePath . '/callback.php');
 
+// ============================================================================
+// CẤU HÌNH CỔNG THANH TOÁN PAYOS
+// ============================================================================
+define('PAYOS_CLIENT_ID', '55bc1fb2-41d8-4619-9bca-400c0a9d2983');
+define('PAYOS_API_KEY', 'e2daa6c4-a08c-4da4-91fc-45e0b310db53');
+
+// LƯU Ý: Nhấn nút Copy (sao chép) bên cạnh Checksum Key trên trang PayOS để lấy toàn bộ mã rồi dán vào đây:
+define('PAYOS_CHECKSUM_KEY', '7a0e7d1896f1ca6eaaf1ad30118e12f28b9f653b5e4fd37568192ced8d3b1615');
 
 // ============================================================================
 // HÀM KẾT NỐI DATABASE DÙNG CHUNG (PDO)

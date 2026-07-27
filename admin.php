@@ -2125,8 +2125,9 @@ try {
                         }, 3000);
                     }
                     </script>
-                <?php endif; ?>
-            </div>
+                </div>
+            <?php endif; ?>
+        </div>
 
             <!-- Tab 3: Quản lý danh mục -->
             <div id="categories-tab" class="tab-content">
