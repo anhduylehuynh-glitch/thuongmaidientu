@@ -1060,11 +1060,6 @@ try {
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
                     </span> Quản lý tài khoản và phân quyền
                 </button>
-                <button class="menu-item" id="menu-categories" onclick="switchTab('categories-tab', this, 'Quản Lý Danh Mục')">
-                    <span class="menu-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                    </span> Quản lý danh mục
-                </button>
                 
                 <div class="menu-divider"></div>
                 
@@ -1147,7 +1142,7 @@ try {
                 <!-- Tab 1: Quản lý sản phẩm -->
                 <div id="products-tab" class="tab-content">
                     <!-- Tìm kiếm & Lọc sản phẩm -->
-                    <div style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+                    <div id="admin-product-search-filter" style="display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
                         <div style="flex: 1; min-width: 280px; position: relative;">
                             <input type="text" id="adminProductSearch" oninput="filterAdminProducts()" placeholder="Tìm kiếm tên sản phẩm hoặc tên người bán..." class="form-control" style="width: 100%; padding: 10px 16px 10px 40px; border-radius: 12px; border: 1px solid rgba(0, 0, 0, 0.08); font-size: 0.9rem; background: #ffffff;">
                             <span style="position: absolute; left: 14px; top: 12px; display: flex; align-items: center; justify-content: center; width: 16px; height: 16px; color: #0f172a;">
@@ -1168,6 +1163,7 @@ try {
                         <button type="button" class="sub-tab-btn active" onclick="switchProductSubTab('product-sub-pending', this)" style="padding: 8px 16px; border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 50px; transition: all 0.2s;">Chờ duyệt (<?php echo $total_pending_global; ?>)</button>
                         <button type="button" class="sub-tab-btn" onclick="switchProductSubTab('product-sub-selling', this)" style="padding: 8px 16px; border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 50px; transition: all 0.2s;">Đang bán (<?php echo $total_selling_global; ?>)</button>
                         <button type="button" class="sub-tab-btn" onclick="switchProductSubTab('product-sub-banned', this)" style="padding: 8px 16px; border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 50px; transition: all 0.2s;">Đã cấm (<?php echo $total_banned_global; ?>)</button>
+                        <button type="button" class="sub-tab-btn" onclick="switchProductSubTab('product-sub-categories', this)" style="padding: 8px 16px; border: none; background: transparent; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 50px; transition: all 0.2s;">Danh mục (<?php echo count($category_list); ?>)</button>
                     </div>
 
                     <!-- Sub Content 1: Chờ duyệt -->
@@ -1190,9 +1186,67 @@ try {
                             <?php renderProductsTable($banned_list, 'Không có sản phẩm nào bị cấm.'); ?>
                         </div>
                     </div>
+
+                    <!-- Sub Content 4: Danh mục -->
+                    <div id="product-sub-categories" class="product-sub-content">
+                        <!-- Form thêm danh mục mới -->
+                        <div style="background: rgba(255,255,255,0.8); border: 1px solid rgba(226,232,240,0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
+                            <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; color: var(--text-main);">Thêm Danh Mục Sản Phẩm Mới</h3>
+                            <form method="POST" action="admin.php" style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 16px; align-items: flex-end;">
+                                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                                <input type="hidden" name="action" value="add_category">
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">Tên danh mục *</label>
+                                    <input type="text" name="cat_name" class="form-control" placeholder="VD: Điện thoại" required>
+                                </div>
+                                <div>
+                                    <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">Mô tả danh mục</label>
+                                    <input type="text" name="cat_desc" class="form-control" placeholder="VD: Điện thoại thông minh, máy đọc sách cũ...">
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="padding: 12px 24px; border-radius: 12px; font-size: 0.9rem;">Thêm Danh Mục</button>
+                            </form>
+                        </div>
+
+                        <!-- Bảng danh sách danh mục -->
+                        <div class="admin-table-card">
+                            <table class="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Tên Danh Mục</th>
+                                        <th>Mô Tả</th>
+                                        <th>Số Sản Phẩm</th>
+                                        <th>Hành Động</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($category_list as $c): ?>
+                                        <tr>
+                                            <td>#<?php echo $c['MaDanhMuc']; ?></td>
+                                            <td><strong><?php echo htmlspecialchars($c['TenDanhMuc']); ?></strong></td>
+                                            <td><span style="color: var(--text-muted); font-size: 0.9rem;"><?php echo htmlspecialchars($c['MoTa'] ?? 'Chưa có mô tả'); ?></span></td>
+                                            <td><span class="badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700;"><?php echo number_format($c['SoLuongSanPham']); ?> sản phẩm</span></td>
+                                            <td>
+                                                <div style="display: flex; gap: 8px;">
+                                                    <button type="button" class="btn-action" style="background: #e0e7ff; color: #4338ca;" onclick="openEditCatModal(<?php echo $c['MaDanhMuc']; ?>, '<?php echo addslashes(htmlspecialchars($c['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($c['MoTa'] ?? '')); ?>')">Sửa</button>
+
+                                                    <form method="POST" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa danh mục này?');">
+                                                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                                                        <input type="hidden" name="action" value="delete_category">
+                                                        <input type="hidden" name="cat_id" value="<?php echo $c['MaDanhMuc']; ?>">
+                                                        <button type="submit" class="btn-action" style="background: #fee2e2; color: #b91c1c;" <?php echo $c['SoLuongSanPham'] > 0 ? 'title="Không thể xóa vì đang có sản phẩm"' : ''; ?>>Xóa</button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                     
                     <!-- Phân Trang Sử Dụng LIMIT OFFSET -->
-                    <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.06); flex-wrap: wrap; gap: 16px;">
+                    <div class="pagination-container" id="admin-product-pagination" style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.06); flex-wrap: wrap; gap: 16px;">
                         <div style="font-size: 0.85rem; color: var(--text-muted);">
                             Hiển thị từ <strong><?php echo min($offset + 1, $total_products); ?></strong> đến <strong><?php echo min($offset + count($product_list), $total_products); ?></strong> trong tổng số <strong><?php echo $total_products; ?></strong> sản phẩm
                         </div>
@@ -2129,63 +2183,7 @@ try {
             <?php endif; ?>
         </div>
 
-            <!-- Tab 3: Quản lý danh mục -->
-            <div id="categories-tab" class="tab-content">
-                <!-- Form thêm danh mục mới -->
-                <div style="background: rgba(255,255,255,0.8); border: 1px solid rgba(226,232,240,0.8); border-radius: 16px; padding: 24px; margin-bottom: 24px;">
-                    <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; color: var(--text-main);">Thêm Danh Mục Sản Phẩm Mới</h3>
-                    <form method="POST" action="admin.php" style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 16px; align-items: flex-end;">
-                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
-                        <input type="hidden" name="action" value="add_category">
-                        <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">Tên danh mục *</label>
-                            <input type="text" name="cat_name" class="form-control" placeholder="VD: Điện thoại" required>
-                        </div>
-                        <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">Mô tả danh mục</label>
-                            <input type="text" name="cat_desc" class="form-control" placeholder="VD: Điện thoại thông minh, máy đọc sách cũ...">
-                        </div>
-                        <button type="submit" class="btn btn-primary" style="padding: 12px 24px; border-radius: 12px; font-size: 0.9rem;">Thêm Danh Mục</button>
-                    </form>
-                </div>
 
-                <!-- Bảng danh sách danh mục -->
-                <div class="admin-table-card">
-                    <table class="admin-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Tên Danh Mục</th>
-                                <th>Mô Tả</th>
-                                <th>Số Sản Phẩm</th>
-                                <th>Hành Động</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($category_list as $c): ?>
-                                <tr>
-                                    <td>#<?php echo $c['MaDanhMuc']; ?></td>
-                                    <td><strong><?php echo htmlspecialchars($c['TenDanhMuc']); ?></strong></td>
-                                    <td><span style="color: var(--text-muted); font-size: 0.9rem;"><?php echo htmlspecialchars($c['MoTa'] ?? 'Chưa có mô tả'); ?></span></td>
-                                    <td><span class="badge" style="background: #e0f2fe; color: #0369a1; font-weight: 700;"><?php echo number_format($c['SoLuongSanPham']); ?> sản phẩm</span></td>
-                                    <td>
-                                        <div style="display: flex; gap: 8px;">
-                                            <button type="button" class="btn-action" style="background: #e0e7ff; color: #4338ca;" onclick="openEditCatModal(<?php echo $c['MaDanhMuc']; ?>, '<?php echo addslashes(htmlspecialchars($c['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($c['MoTa'] ?? '')); ?>')">Sửa</button>
-
-                                            <form method="POST" style="display: inline;" onsubmit="return confirm('Bạn có chắc muốn xóa danh mục này?');">
-                                                <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
-                                                <input type="hidden" name="action" value="delete_category">
-                                                <input type="hidden" name="cat_id" value="<?php echo $c['MaDanhMuc']; ?>">
-                                                <button type="submit" class="btn-action" style="background: #fee2e2; color: #b91c1c;" <?php echo $c['SoLuongSanPham'] > 0 ? 'title="Không thể xóa vì đang có sản phẩm"' : ''; ?>>Xóa</button>
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
 
             <!-- Modal Sửa Danh Mục -->
             <div id="editCatModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center;">
@@ -2338,6 +2336,17 @@ try {
             btn.classList.add('active');
             // Lưu sub-tab hoạt động vào sessionStorage
             sessionStorage.setItem('admin_product_sub_tab', subTabId);
+            
+            // Ẩn/hiện bộ tìm kiếm và phân trang của sản phẩm khi chuyển sang sub-tab danh mục
+            const searchFilter = document.getElementById('admin-product-search-filter');
+            const pagination = document.getElementById('admin-product-pagination');
+            if (subTabId === 'product-sub-categories') {
+                if (searchFilter) searchFilter.style.display = 'none';
+                if (pagination) pagination.style.display = 'none';
+            } else {
+                if (searchFilter) searchFilter.style.display = 'flex';
+                if (pagination) pagination.style.display = 'flex';
+            }
         }
 
         function switchUserSubTab(subTabId, btn) {
@@ -2577,6 +2586,9 @@ try {
                         targetSubBtn = btn;
                     }
                 });
+                if (targetSubBtn) {
+                    switchProductSubTab(activeSubTabId, targetSubBtn);
+                }
             }
 
             // Khôi phục sub-tab người dùng
