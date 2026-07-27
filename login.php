@@ -1,7 +1,7 @@
 <?php
 require_once 'config/config.php';
 
-if (isset($_SESSION['user'])) {
+if (isset($_SESSION['user_id'])) {
     header("Location: index.php");
     exit;
 }
@@ -9,6 +9,11 @@ if (isset($_SESSION['user'])) {
 // Tạo mã state bảo mật để tránh tấn công CSRF (Cross-Site Request Forgery)
 if (empty($_SESSION['oauth2state'])) {
     $_SESSION['oauth2state'] = bin2hex(random_bytes(16));
+}
+
+// Lưu tham số chuyển hướng nếu có
+if (isset($_GET['redirect'])) {
+    $_SESSION['oauth_redirect'] = $_GET['redirect'];
 }
 
 $state = $_SESSION['oauth2state'];

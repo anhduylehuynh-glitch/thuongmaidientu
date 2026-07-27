@@ -8,14 +8,14 @@ $db_error = false;
 $db_error_message = '';
 
 // Kiểm tra xem đã đăng nhập chưa
-if (isset($_SESSION['user'])) {
+if (isset($_SESSION['user_id'])) {
     try {
         $db = getDBConnection();
-        $session_user = $_SESSION['user'];
+        $user_id = $_SESSION['user_id'];
 
         // Truy vấn dữ liệu mới nhất từ CSDL
         $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
-        $stmt->execute(['id' => $session_user['MaNguoiDung']]);
+        $stmt->execute(['id' => $user_id]);
         $user_data = $stmt->fetch();
 
         if ($user_data) {
@@ -31,6 +31,7 @@ if (isset($_SESSION['user'])) {
             $role_stmt->execute(['id' => $user_data['MaNguoiDung']]);
             $user_roles = $role_stmt->fetchAll(PDO::FETCH_COLUMN);
         } else {
+            $_SESSION = [];
             session_destroy();
             header("Location: index.php");
             exit;
@@ -39,7 +40,7 @@ if (isset($_SESSION['user'])) {
         $db_error = true;
         $db_error_message = $e->getMessage();
         $is_logged_in = true;
-        $user_data = $_SESSION['user'];
+        $user_data = $_SESSION['user'] ?? null;
         $user_roles = ['Mất kết nối DB'];
     }
 }
@@ -479,7 +480,7 @@ if (empty($products) && empty($keyword) && empty($category)) {
                                     </a>
                                 <?php endif; ?>
                                 <div class="dropdown-divider"></div>
-                                <a href="logout.php" class="dropdown-item" style="color: var(--error)">
+                                <a href="javascript:void(0)" onclick="const f = document.createElement('form'); f.method = 'POST'; f.action = 'logout.php'; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'csrf_token'; i.value = '<?php echo getCsrfToken(); ?>'; f.appendChild(i); document.body.appendChild(f); f.submit();" class="dropdown-item" style="color: var(--error)">
                                     Đăng xuất
                                 </a>
                             </div>
@@ -867,6 +868,16 @@ if (empty($products) && empty($keyword) && empty($category)) {
             }
             document.getElementById('productDetailModal').style.display = 'none';
         }
+        // Tự động thêm CSRF Token vào tất cả các form POST
+        document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(form => {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = '<?php echo getCsrfToken(); ?>';
+                form.appendChild(input);
+            }
+        });
     </script>
 </body>
 

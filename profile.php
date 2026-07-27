@@ -2,10 +2,7 @@
 require_once 'config/config.php';
 
 // Kiểm tra đăng nhập
-if (!isset($_SESSION['user'])) {
-    header("Location: login_page.php");
-    exit;
-}
+requireLogin();
 
 $is_logged_in = true;
 $db_error = false;
@@ -221,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_update_profile
                                 <a href="admin.php" class="dropdown-item" style="color: #6366f1; font-weight: 600;">Trang Quản Lý Admin</a>
                             <?php endif; ?>
                             <div class="dropdown-divider"></div>
-                            <a href="logout.php" class="dropdown-item" style="color: var(--error)">Đăng xuất</a>
+                            <a href="javascript:void(0)" onclick="const f = document.createElement('form'); f.method = 'POST'; f.action = 'logout.php'; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'csrf_token'; i.value = '<?php echo getCsrfToken(); ?>'; f.appendChild(i); document.body.appendChild(f); f.submit();" class="dropdown-item" style="color: var(--error)">Đăng xuất</a>
                         </div>
                     </div>
                 </nav>
@@ -374,6 +371,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action_update_profile
                 menu.classList.remove('show');
             });
         }
+
+        // Tự động thêm CSRF Token vào tất cả các form POST
+        document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(form => {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = '<?php echo getCsrfToken(); ?>';
+                form.appendChild(input);
+            }
+        });
     </script>
 </body>
 </html>

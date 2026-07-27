@@ -2,7 +2,7 @@
 require_once 'config/config.php';
 
 // Kiểm tra đăng nhập
-if (!isset($_SESSION['user'])) {
+if (!isset($_SESSION['user_id'])) {
     header("Location: login_page.php?redirect=post_product.php");
     exit;
 }
@@ -109,6 +109,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $grant_seller->execute(['uid' => $user_data['MaNguoiDung'], 'rid' => $seller_rid]);
         }
 
+        // Cập nhật lại dữ liệu mới nhất vào biến và Session để đồng bộ
+        $stmt_reload = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
+        $stmt_reload->execute(['id' => $user_data['MaNguoiDung']]);
+        $user_data = $stmt_reload->fetch();
+        $_SESSION['user'] = $user_data;
+
         // Cập nhật lại biến vai trò & thông báo thành công
         $user_roles[] = 'SELLER';
         $is_seller = true;
@@ -122,6 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 // Xử lý Form 2: Đăng sản phẩm mới (Product Creation)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'post_product') {
     try {
+        requirePermission('product.create');
         if (!$is_seller) {
             throw new Exception("Bạn cần hoàn tất đăng ký thông tin bán hàng trước khi đăng sản phẩm.");
         }
@@ -401,7 +408,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 <a href="admin.php" class="dropdown-item">Trang Quản Lý Admin</a>
                             <?php endif; ?>
                             <div class="dropdown-divider"></div>
-                            <a href="logout.php" class="dropdown-item" style="color: var(--error)">Đăng xuất</a>
+                            <a href="javascript:void(0)" onclick="const f = document.createElement('form'); f.method = 'POST'; f.action = 'logout.php'; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'csrf_token'; i.value = '<?php echo getCsrfToken(); ?>'; f.appendChild(i); document.body.appendChild(f); f.submit();" class="dropdown-item" style="color: var(--error)">Đăng xuất</a>
                         </div>
                     </div>
                 </nav>
@@ -648,6 +655,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     const formData = new FormData();
                     formData.append('type', 'image');
                     formData.append('file', file);
+                    formData.append('csrf_token', '<?php echo getCsrfToken(); ?>');
 
                     try {
                         const res = await fetch('upload_media.php', {
@@ -800,6 +808,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     const formData = new FormData();
                     formData.append('type', 'video');
                     formData.append('file', file);
+                    formData.append('csrf_token', '<?php echo getCsrfToken(); ?>');
 
                     try {
                         const res = await fetch('upload_media.php', { method: 'POST', body: formData });
@@ -828,6 +837,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 };
             });
         }
+        // Tự động thêm CSRF Token vào tất cả các form POST
+        document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(form => {
+            if (!form.querySelector('input[name="csrf_token"]')) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'csrf_token';
+                input.value = '<?php echo getCsrfToken(); ?>';
+                form.appendChild(input);
+            }
+        });
     </script>
 </body>
 

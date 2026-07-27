@@ -32,10 +32,12 @@ CREATE TABLE Quyen (
 CREATE TABLE NguoiDung (
     MaNguoiDung INT AUTO_INCREMENT PRIMARY KEY,
     TenDangNhap VARCHAR(50) NOT NULL UNIQUE,
-    MatKhau VARCHAR(255) NOT NULL, -- Độ rộng 255 để lưu hash mật khẩu (bcrypt/argon2)
+    MatKhau VARCHAR(255) NULL, -- Độ rộng 255 để lưu hash mật khẩu (bcrypt/argon2), NULL cho OAuth
     HoTen VARCHAR(100) NOT NULL,
     SoDienThoai VARCHAR(15) NULL,
     Email VARCHAR(50) NULL UNIQUE,
+    google_id VARCHAR(255) NULL UNIQUE,
+    google_picture VARCHAR(255) NULL,
     DiemUyTin INT DEFAULT 0, -- Tích lũy để phân hạng thành viên
     HangThanhVien VARCHAR(30) DEFAULT 'Đồng', -- 'Đồng', 'Bạc', 'Vàng', 'Kim Cương'
     TrangThaiTaiKhoan BIT(1) DEFAULT b'1', -- b'1': Hoạt động, b'0': Bị khóa
