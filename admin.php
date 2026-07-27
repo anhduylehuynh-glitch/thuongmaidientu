@@ -43,6 +43,14 @@ try {
             ['name' => 'product.create', 'desc' => 'Quyền đăng bán sản phẩm mới'],
             ['name' => 'product.update', 'desc' => 'Quyền phê duyệt hoặc cập nhật trạng thái sản phẩm'],
             ['name' => 'product.delete', 'desc' => 'Quyền xóa sản phẩm khỏi hệ thống'],
+            ['name' => 'category.view', 'desc' => 'Quyền xem danh mục sản phẩm'],
+            ['name' => 'category.create', 'desc' => 'Quyền thêm danh mục sản phẩm mới'],
+            ['name' => 'category.update', 'desc' => 'Quyền chỉnh sửa thông tin danh mục'],
+            ['name' => 'category.delete', 'desc' => 'Quyền xóa danh mục sản phẩm'],
+            ['name' => 'order.view', 'desc' => 'Quyền xem danh sách hóa đơn đơn hàng'],
+            ['name' => 'order.create', 'desc' => 'Quyền tạo đơn hàng mới'],
+            ['name' => 'order.update', 'desc' => 'Quyền cập nhật trạng thái đơn hàng'],
+            ['name' => 'order.delete', 'desc' => 'Quyền hủy hoặc xóa đơn hàng'],
             ['name' => 'user.view', 'desc' => 'Quyền xem danh sách tài khoản'],
             ['name' => 'user.lock', 'desc' => 'Quyền khóa hoặc mở khóa tài khoản'],
             ['name' => 'role.create', 'desc' => 'Quyền tạo vai trò mới'],
@@ -110,6 +118,102 @@ try {
 } catch (Exception $e) {
     header("Location: index.php");
     exit;
+}
+
+function getPermissionGroupAndAction($perm_name) {
+    $parts = explode('.', $perm_name);
+    if (count($parts) < 2) {
+        return ['group' => 'Khác', 'action' => $perm_name];
+    }
+    
+    $action_key = array_pop($parts);
+    $module_key = implode('.', $parts);
+    
+    $group = 'Khác';
+    switch ($module_key) {
+        case 'product':
+            $group = 'Sản phẩm';
+            break;
+        case 'category':
+            $group = 'Danh mục';
+            break;
+        case 'order':
+            $group = 'Đơn hàng';
+            break;
+        case 'user':
+            $group = 'Tài khoản';
+            break;
+        case 'role':
+        case 'permission':
+        case 'role.permission':
+            $group = 'Vai trò';
+            break;
+    }
+    
+    $action = $action_key;
+    switch ($action_key) {
+        case 'view':
+            $action = 'Xem';
+            break;
+        case 'create':
+            $action = 'Thêm';
+            break;
+        case 'update':
+            $action = 'Sửa';
+            break;
+        case 'delete':
+            $action = 'Xóa';
+            break;
+        case 'lock':
+            $action = 'Khóa/Mở';
+            break;
+        case 'assign':
+            $action = 'Gán';
+            break;
+    }
+    
+    return ['group' => $group, 'action' => $action];
+}
+
+function getRolePermissionsData($db, $role_id) {
+    $all_perms = $db->query("SELECT * FROM `Quyen` ORDER BY `TenQuyen` ASC")->fetchAll();
+    
+    $assigned_stmt = $db->prepare("
+        SELECT q.* 
+        FROM `Quyen` q
+        JOIN `VaiTro_Quyen` vq ON q.MaQuyen = vq.MaQuyen
+        WHERE vq.MaVaiTro = :rid
+        ORDER BY q.TenQuyen ASC
+    ");
+    $assigned_stmt->execute(['rid' => $role_id]);
+    $assigned_perms = $assigned_stmt->fetchAll();
+    
+    $assigned_ids = array_column($assigned_perms, 'MaQuyen');
+    
+    $assigned_list = [];
+    $available_list = [];
+    
+    foreach ($all_perms as $perm) {
+        $info = getPermissionGroupAndAction($perm['TenQuyen']);
+        $perm_data = [
+            'MaQuyen' => (int)$perm['MaQuyen'],
+            'TenQuyen' => $perm['TenQuyen'],
+            'MoTa' => $perm['MoTa'] ?? '',
+            'Group' => $info['group'],
+            'Action' => $info['action']
+        ];
+        
+        if (in_array($perm['MaQuyen'], $assigned_ids)) {
+            $assigned_list[] = $perm_data;
+        } else {
+            $available_list[] = $perm_data;
+        }
+    }
+    
+    return [
+        'assigned' => $assigned_list,
+        'available' => $available_list
+    ];
 }
 
 // Xử lý các thao tác Admin (POST / GET)
@@ -222,6 +326,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $ins_role = $db->prepare("INSERT INTO `VaiTro` (`TenVaiTro`, `MoTa`) VALUES (:name, :desc)");
             $ins_role->execute(['name' => $role_name, 'desc' => $role_desc]);
             $success = "Đã tạo vai trò mới `" . htmlspecialchars($role_name) . "` thành công.";
+        }
+
+        if ($_POST['action'] === 'delete_role') {
+            requirePermission('role.update');
+            $rid = (int)($_POST['role_id'] ?? 0);
+
+            // Kiểm tra xem vai trò có phải ADMIN không
+            $check_name = $db->prepare("SELECT TenVaiTro FROM `VaiTro` WHERE `MaVaiTro` = :rid");
+            $check_name->execute(['rid' => $rid]);
+            $role_name = $check_name->fetchColumn();
+
+            if ($role_name === false) {
+                throw new Exception("Vai trò không tồn tại.");
+            }
+            if ($role_name === 'ADMIN') {
+                throw new Exception("Không thể xóa vai trò ADMIN mặc định của hệ thống.");
+            }
+
+            $del_role = $db->prepare("DELETE FROM `VaiTro` WHERE `MaVaiTro` = :rid");
+            $del_role->execute(['rid' => $rid]);
+            $success = "Đã xóa thành công vai trò `" . htmlspecialchars($role_name) . "`.";
         }
 
         if ($_POST['action'] === 'create_permission') {
@@ -340,6 +465,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             } catch (Exception $ex) {
                 $db->rollBack();
                 throw $ex;
+            }
+        }
+
+        if ($_POST['action'] === 'add_role_permission') {
+            requirePermission('role.permission.update');
+            $rid = (int)($_POST['role_id'] ?? 0);
+            $perm_ids = $_POST['perm_ids'] ?? [];
+            if (!is_array($perm_ids)) {
+                $perm_ids = [$perm_ids];
+            }
+
+            // Kiểm tra vai trò có tồn tại không
+            $check_role = $db->prepare("SELECT COUNT(*) FROM `VaiTro` WHERE `MaVaiTro` = :rid");
+            $check_role->execute(['rid' => $rid]);
+            if ((int)$check_role->fetchColumn() === 0) {
+                throw new Exception("Vai trò không tồn tại.");
+            }
+
+            $db->beginTransaction();
+            try {
+                $ins = $db->prepare("INSERT IGNORE INTO `VaiTro_Quyen` (`MaVaiTro`, `MaQuyen`) VALUES (:rid, :pid)");
+                foreach ($perm_ids as $pid) {
+                    $pid = (int)$pid;
+                    $check_perm = $db->prepare("SELECT COUNT(*) FROM `Quyen` WHERE `MaQuyen` = :pid");
+                    $check_perm->execute(['pid' => $pid]);
+                    if ((int)$check_perm->fetchColumn() > 0) {
+                        $ins->execute(['rid' => $rid, 'pid' => $pid]);
+                    }
+                }
+                $db->commit();
+                $success = "Đã thêm quyền thành công.";
+            } catch (Exception $ex) {
+                $db->rollBack();
+                throw $ex;
+            }
+
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                $data = getRolePermissionsData($db, $rid);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => $success,
+                    'assigned' => $data['assigned'],
+                    'available' => $data['available']
+                ]);
+                exit;
+            }
+        }
+
+        if ($_POST['action'] === 'remove_role_permission') {
+            requirePermission('role.permission.update');
+            $rid = (int)($_POST['role_id'] ?? 0);
+            $pid = (int)($_POST['perm_id'] ?? 0);
+
+            // Kiểm tra vai trò có tồn tại không
+            $check_role = $db->prepare("SELECT COUNT(*) FROM `VaiTro` WHERE `MaVaiTro` = :rid");
+            $check_role->execute(['rid' => $rid]);
+            if ((int)$check_role->fetchColumn() === 0) {
+                throw new Exception("Vai trò không tồn tại.");
+            }
+
+            // Kiểm tra quyền có tồn tại không
+            $check_perm = $db->prepare("SELECT COUNT(*) FROM `Quyen` WHERE `MaQuyen` = :pid");
+            $check_perm->execute(['pid' => $pid]);
+            if ((int)$check_perm->fetchColumn() === 0) {
+                throw new Exception("Quyền không tồn tại.");
+            }
+
+            $del = $db->prepare("DELETE FROM `VaiTro_Quyen` WHERE `MaVaiTro` = :rid AND `MaQuyen` = :pid");
+            $del->execute(['rid' => $rid, 'pid' => $pid]);
+            $success = "Đã thu hồi quyền thành công.";
+
+            if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
+                $data = getRolePermissionsData($db, $rid);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'status' => 'success',
+                    'message' => $success,
+                    'assigned' => $data['assigned'],
+                    'available' => $data['available']
+                ]);
+                exit;
             }
         }
 
@@ -1194,51 +1401,730 @@ try {
                         </div>
                     </div>
 
-                    <!-- Dòng 2: Ma Trận Vai Trò & Quyền Hạn -->
+                    <!-- Dòng 2: Phân Quyền Theo Vai Trò (Tái cấu trúc theo yêu cầu) -->
                     <div style="background: rgba(255,255,255,0.8); border: 1px solid rgba(226,232,240,0.8); border-radius: 16px; padding: 24px;">
-                        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif;">Ma Trận Vai Trò & Quyền Hạn</h3>
-                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;">Tích chọn quyền hạn cho từng vai trò và bấm lưu lại.</p>
+                        <style>
+                            .role-section-card {
+                                background: #ffffff;
+                                border: 1px solid rgba(226, 232, 240, 0.8);
+                                border-radius: 16px;
+                                padding: 24px;
+                                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+                                margin-bottom: 24px;
+                                transition: box-shadow 0.3s ease;
+                            }
+                            .role-section-card:hover {
+                                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+                            }
+                            .role-section-header {
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                                border-bottom: 1px solid #f1f5f9;
+                                padding-bottom: 16px;
+                                margin-bottom: 16px;
+                                flex-wrap: wrap;
+                                gap: 12px;
+                            }
+                            .role-info {
+                                display: flex;
+                                flex-direction: column;
+                                gap: 4px;
+                            }
+                            .role-name {
+                                font-size: 1.2rem;
+                                font-weight: 700;
+                                color: var(--primary, #0284c7);
+                                margin: 0;
+                                text-transform: uppercase;
+                            }
+                            .role-desc {
+                                font-size: 0.85rem;
+                                color: var(--text-muted, #64748b);
+                                margin: 0;
+                            }
+                            .btn-add-perm {
+                                background: linear-gradient(135deg, var(--primary, #0284c7) 0%, #0369a1 100%);
+                                color: #ffffff;
+                                border: none;
+                                padding: 8px 16px;
+                                border-radius: 50px;
+                                font-size: 0.85rem;
+                                font-weight: 700;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 6px;
+                                box-shadow: 0 4px 6px rgba(2, 132, 199, 0.2);
+                                transition: all 0.2s ease;
+                            }
+                            .btn-add-perm:hover {
+                                transform: translateY(-1px);
+                                box-shadow: 0 6px 12px rgba(2, 132, 199, 0.3);
+                                opacity: 0.95;
+                            }
+                            .plus-icon {
+                                font-size: 1.1rem;
+                                font-weight: 700;
+                            }
+                            .role-perms-table-wrapper {
+                                overflow-x: auto;
+                            }
+                            .role-perms-table {
+                                width: 100%;
+                                border-collapse: collapse;
+                                font-size: 0.85rem;
+                            }
+                            .role-perms-table th {
+                                background: #f8fafc;
+                                color: #475569;
+                                font-weight: 700;
+                                padding: 10px 14px;
+                                text-align: left;
+                                border-bottom: 2px solid #e2e8f0;
+                            }
+                            .role-perms-table td {
+                                padding: 12px 14px;
+                                border-bottom: 1px solid #f1f5f9;
+                                vertical-align: middle;
+                            }
+                            .perm-name-cell code {
+                                background: #f1f5f9;
+                                color: #0f172a;
+                                padding: 3px 6px;
+                                border-radius: 6px;
+                                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                                font-size: 0.8rem;
+                                font-weight: 600;
+                                border: 1px solid #e2e8f0;
+                            }
+                            .badge-group {
+                                background: #e0f2fe;
+                                color: #0369a1;
+                                font-weight: 700;
+                                padding: 4px 8px;
+                                border-radius: 6px;
+                                font-size: 0.75rem;
+                            }
+                            .badge-action {
+                                background: #f0fdf4;
+                                color: #166534;
+                                font-weight: 700;
+                                padding: 4px 8px;
+                                border-radius: 6px;
+                                font-size: 0.75rem;
+                            }
+                            .btn-revoke-perm {
+                                background: #fee2e2;
+                                color: #ef4444;
+                                border: none;
+                                width: 28px;
+                                height: 28px;
+                                border-radius: 6px;
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                cursor: pointer;
+                                transition: all 0.2s ease;
+                            }
+                            .btn-revoke-perm:hover {
+                                background: #fca5a5;
+                                color: #991b1b;
+                            }
+
+                            /* Modal styling */
+                            .custom-modal-overlay {
+                                position: fixed;
+                                top: 0;
+                                left: 0;
+                                right: 0;
+                                bottom: 0;
+                                background: rgba(15, 23, 42, 0.6);
+                                backdrop-filter: blur(4px);
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                z-index: 9999;
+                                opacity: 0;
+                                pointer-events: none;
+                                transition: opacity 0.3s ease;
+                            }
+                            .custom-modal-overlay.show {
+                                opacity: 1;
+                                pointer-events: auto;
+                            }
+                            .custom-modal-card {
+                                background: #ffffff;
+                                border-radius: 20px;
+                                width: 100%;
+                                max-width: 650px;
+                                box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                                display: flex;
+                                flex-direction: column;
+                                max-height: 85vh;
+                                transform: translateY(20px);
+                                transition: transform 0.3s ease;
+                                overflow: hidden;
+                            }
+                            .custom-modal-overlay.show .custom-modal-card {
+                                transform: translateY(0);
+                            }
+                            .custom-modal-header {
+                                padding: 20px 24px;
+                                border-bottom: 1px solid #e2e8f0;
+                                display: flex;
+                                justify-content: space-between;
+                                align-items: center;
+                            }
+                            .custom-modal-title {
+                                font-size: 1.15rem;
+                                font-weight: 700;
+                                color: #0f172a;
+                                margin: 0;
+                            }
+                            .custom-modal-close {
+                                background: transparent;
+                                border: none;
+                                color: #94a3b8;
+                                font-size: 1.5rem;
+                                cursor: pointer;
+                                line-height: 1;
+                            }
+                            .custom-modal-close:hover {
+                                color: #475569;
+                            }
+                            .custom-modal-body {
+                                padding: 24px;
+                                overflow-y: auto;
+                            }
+                            .custom-modal-footer {
+                                padding: 16px 24px;
+                                border-top: 1px solid #e2e8f0;
+                                display: flex;
+                                justify-content: flex-end;
+                                gap: 12px;
+                                background: #f8fafc;
+                            }
+                            .btn-cancel {
+                                background: #e2e8f0;
+                                color: #475569;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 10px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                font-size: 0.9rem;
+                                transition: background 0.2s;
+                            }
+                            .btn-cancel:hover {
+                                background: #cbd5e1;
+                            }
+                            .btn-save-perm {
+                                background: linear-gradient(135deg, var(--primary, #0284c7) 0%, #0369a1 100%);
+                                color: #ffffff;
+                                border: none;
+                                padding: 10px 24px;
+                                border-radius: 10px;
+                                font-weight: 700;
+                                cursor: pointer;
+                                font-size: 0.9rem;
+                                box-shadow: 0 4px 6px rgba(2, 132, 199, 0.2);
+                                transition: all 0.2s;
+                            }
+                            .btn-save-perm:hover {
+                                opacity: 0.95;
+                                box-shadow: 0 6px 12px rgba(2, 132, 199, 0.3);
+                            }
+
+                            /* Grouping in modal */
+                            .modal-group-section {
+                                margin-bottom: 24px;
+                            }
+                            .modal-group-header {
+                                font-size: 0.95rem;
+                                font-weight: 700;
+                                color: #1e293b;
+                                border-left: 4px solid var(--primary, #0284c7);
+                                padding-left: 8px;
+                                margin-bottom: 12px;
+                            }
+                            .modal-group-grid {
+                                display: grid;
+                                grid-template-columns: repeat(2, 1fr);
+                                gap: 12px;
+                            }
+                            @media (max-width: 500px) {
+                                .modal-group-grid {
+                                    grid-template-columns: 1fr;
+                                }
+                            }
+                            .perm-checkbox-item {
+                                display: flex;
+                                align-items: flex-start;
+                                gap: 10px;
+                                padding: 10px 12px;
+                                border-radius: 8px;
+                                border: 1px solid #e2e8f0;
+                                background: #f8fafc;
+                                cursor: pointer;
+                                transition: all 0.2s ease;
+                                user-select: none;
+                            }
+                            .perm-checkbox-item:hover {
+                                background: #e0f2fe;
+                                border-color: #bae6fd;
+                            }
+                            .perm-checkbox-item input[type="checkbox"] {
+                                width: 16px;
+                                height: 16px;
+                                margin-top: 2px;
+                                cursor: pointer;
+                            }
+                            .perm-checkbox-item.checked {
+                                background: #f0fdf4;
+                                border-color: #bbf7d0;
+                            }
+                            .perm-checkbox-item.checked:hover {
+                                background: #dcfce7;
+                                border-color: #86efac;
+                            }
+                        </style>
+
+                        <h3 style="font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; color: var(--text-main); font-family: 'Be Vietnam Pro', sans-serif;">Phân Quyền Theo Vai Trò</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 24px;">Quản lý và cấp quyền hạn chi tiết cho từng vai trò trên hệ thống.</p>
                         
-                        <form method="POST" action="admin.php" onsubmit="return confirm('Bạn có chắc chắn muốn lưu các thay đổi phân quyền trên ma trận này không?');">
-                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
-                            <input type="hidden" name="action" value="update_permissions_matrix">
-                            <div class="admin-table-card" style="border: none; box-shadow: none; padding: 0; background: transparent; overflow-x: auto; max-height: 480px;">
-                                <table class="admin-table" style="font-size: 0.85rem; width: 100%; border-collapse: collapse;">
-                                    <thead>
-                                        <tr style="background: #f8fafc;">
-                                            <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; text-align: left;">Vai Trò</th>
-                                            <?php foreach ($all_permissions as $perm): ?>
-                                                <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; text-align: center; white-space: nowrap;">
-                                                    <span style="font-weight: 700;" title="<?php echo htmlspecialchars($perm['MoTa'] ?? ''); ?>">
-                                                        <?php echo htmlspecialchars($perm['TenQuyen']); ?>
-                                                    </span>
-                                                </th>
-                                            <?php endforeach; ?>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($all_roles as $role): ?>
-                                            <tr style="border-bottom: 1px solid #e2e8f0;">
-                                                <td style="padding: 12px;">
-                                                    <strong style="color: var(--primary);"><?php echo htmlspecialchars($role['TenVaiTro']); ?></strong>
-                                                    <div style="font-size: 0.75rem; color: var(--text-muted);"><?php echo htmlspecialchars($role['MoTa'] ?? ''); ?></div>
-                                                </td>
-                                                <?php foreach ($all_permissions as $perm): ?>
-                                                    <?php 
-                                                        $is_checked = in_array($perm['TenQuyen'], $role['Permissions'] ?? []);
-                                                    ?>
-                                                    <td style="padding: 12px; text-align: center;">
-                                                        <input type="checkbox" name="matrix_perms[<?php echo $role['MaVaiTro']; ?>][]" value="<?php echo $perm['MaQuyen']; ?>" <?php echo $is_checked ? 'checked' : ''; ?> style="width: 18px; height: 18px; cursor: pointer;">
-                                                    </td>
-                                                <?php endforeach; ?>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <button type="submit" class="btn btn-primary" style="margin-top: 20px; width: 100%; padding: 12px; border-radius: 12px; font-size: 0.9rem; font-weight: 700;" <?php echo !hasPermission($_SESSION['user_id'], 'role.permission.update') ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''; ?>>Lưu Ma Trận Quyền Hạn</button>
-                        </form>
+                        <div class="roles-sections-container">
+                            <?php foreach ($all_roles as $role): ?>
+                                <div class="role-section-card" id="role-section-<?php echo $role['MaVaiTro']; ?>">
+                                    <div class="role-section-header">
+                                        <div class="role-info">
+                                            <h4 class="role-name"><?php echo htmlspecialchars($role['TenVaiTro']); ?></h4>
+                                            <p class="role-desc"><?php echo htmlspecialchars($role['MoTa'] ?? 'Chưa có mô tả'); ?></p>
+                                        </div>
+                                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                                            <button type="button" class="btn-add-perm" onclick="openAddPermissionModal(<?php echo $role['MaVaiTro']; ?>, '<?php echo addslashes(htmlspecialchars($role['TenVaiTro'])); ?>')" <?php echo !hasPermission($_SESSION['user_id'], 'role.permission.update') ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''; ?>>
+                                                <span class="plus-icon">+</span> Thêm Quyền
+                                            </button>
+                                            
+                                            <?php if ($role['TenVaiTro'] !== 'ADMIN'): ?>
+                                                <form method="POST" action="admin.php" onsubmit="return confirm('Bạn có chắc chắn muốn XÓA hoàn toàn vai trò [ <?php echo addslashes(htmlspecialchars($role['TenVaiTro'])); ?> ] khỏi hệ thống không? Hành động này không thể hoàn tác.');" style="display: inline;">
+                                                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                                                    <input type="hidden" name="action" value="delete_role">
+                                                    <input type="hidden" name="role_id" value="<?php echo $role['MaVaiTro']; ?>">
+                                                    <button type="submit" class="btn-revoke-perm" style="width: auto; height: 35px; padding: 0 14px; border-radius: 50px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.85rem;" <?php echo !hasPermission($_SESSION['user_id'], 'role.update') ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''; ?> title="Xóa vai trò">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:14px; height:14px;">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                                        </svg>
+                                                        Xóa Vai Trò
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="role-perms-table-wrapper">
+                                        <table class="role-perms-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Tên Quyền</th>
+                                                    <th>Mô Tả</th>
+                                                    <th>Nhóm (Module)</th>
+                                                    <th>Hành Động</th>
+                                                    <th style="width: 80px; text-align: center;">Thao Tác</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="role-perms-body-<?php echo $role['MaVaiTro']; ?>">
+                                                <?php 
+                                                $role_data = getRolePermissionsData($db, $role['MaVaiTro']);
+                                                if (empty($role_data['assigned'])): ?>
+                                                    <tr class="no-perms-row">
+                                                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Vai trò này chưa được cấp quyền nào.</td>
+                                                    </tr>
+                                                <?php else: 
+                                                    foreach ($role_data['assigned'] as $perm): ?>
+                                                        <tr id="perm-row-<?php echo $role['MaVaiTro']; ?>-<?php echo $perm['MaQuyen']; ?>">
+                                                            <td class="perm-name-cell"><code><?php echo htmlspecialchars($perm['TenQuyen']); ?></code></td>
+                                                            <td><span style="font-size: 0.85rem; color: #475569;"><?php echo htmlspecialchars($perm['MoTa']); ?></span></td>
+                                                            <td><span class="badge-group"><?php echo htmlspecialchars($perm['Group']); ?></span></td>
+                                                            <td><span class="badge-action"><?php echo htmlspecialchars($perm['Action']); ?></span></td>
+                                                            <td style="text-align: center;">
+                                                                <button type="button" class="btn-revoke-perm" onclick="removeRolePermission(<?php echo $role['MaVaiTro']; ?>, <?php echo $perm['MaQuyen']; ?>, '<?php echo addslashes(htmlspecialchars($perm['TenQuyen'])); ?>')" <?php echo !hasPermission($_SESSION['user_id'], 'role.permission.update') ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''; ?> title="Thu hồi quyền">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:16px; height:16px;">
+                                                                        <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                                                    </svg>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; 
+                                                endif; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
+
+                    <!-- Modal Thêm Quyền Hạn -->
+                    <div id="add-permission-modal" class="custom-modal-overlay" onclick="if(event.target === this) closeModal();">
+                        <div class="custom-modal-card">
+                            <div class="custom-modal-header">
+                                <h4 class="custom-modal-title">Thêm quyền cho vai trò: <span id="modal-role-name" style="color: var(--primary); text-transform: uppercase;"></span></h4>
+                                <button type="button" class="custom-modal-close" onclick="closeModal()">&times;</button>
+                            </div>
+                            <input type="hidden" id="modal-role-id" value="">
+                            <div class="custom-modal-body" id="modal-perms-container">
+                                <!-- JS render groups of checkbox-items dynamically -->
+                            </div>
+                            <div class="custom-modal-footer">
+                                <button type="button" class="btn-cancel" onclick="closeModal()">Đóng</button>
+                                <button type="button" class="btn-save-perm" id="btn-save-modal" onclick="submitAddPermissions()">Lưu Thay Đổi</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                    // Khởi tạo dữ liệu phân quyền ban đầu từ PHP
+                    const rolePermissionsData = {
+                        <?php foreach ($all_roles as $role): 
+                            $data = getRolePermissionsData($db, $role['MaVaiTro']);
+                        ?>
+                        "<?php echo $role['MaVaiTro']; ?>": {
+                            "assigned": <?php echo json_encode($data['assigned']); ?>,
+                            "available": <?php echo json_encode($data['available']); ?>
+                        },
+                        <?php endforeach; ?>
+                    };
+
+                    const csrfToken = "<?php echo $_SESSION['csrf_token'] ?? ''; ?>";
+                    const hasUpdatePermission = <?php echo hasPermission($_SESSION['user_id'], 'role.permission.update') ? 'true' : 'false'; ?>;
+
+                    // Render danh sách các quyền đã gán cho vai trò
+                    function renderRolePermissions(roleId) {
+                        const tbody = document.getElementById(`role-perms-body-${roleId}`);
+                        if (!tbody) return;
+                        
+                        const assigned = rolePermissionsData[roleId].assigned;
+                        
+                        if (assigned.length === 0) {
+                            tbody.innerHTML = `
+                                <tr class="no-perms-row">
+                                    <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Vai trò này chưa được cấp quyền nào.</td>
+                                </tr>
+                            `;
+                            return;
+                        }
+                        
+                        let html = '';
+                        assigned.forEach(perm => {
+                            html += `
+                                <tr id="perm-row-${roleId}-${perm.MaQuyen}">
+                                    <td class="perm-name-cell"><code>${escapeHtml(perm.TenQuyen)}</code></td>
+                                    <td><span style="font-size: 0.85rem; color: #475569;">${escapeHtml(perm.MoTa)}</span></td>
+                                    <td><span class="badge-group">${escapeHtml(perm.Group)}</span></td>
+                                    <td><span class="badge-action">${escapeHtml(perm.Action)}</span></td>
+                                    <td style="text-align: center;">
+                                        <button type="button" class="btn-revoke-perm" onclick="removeRolePermission(${roleId}, ${perm.MaQuyen}, '${escapeHtml(perm.TenQuyen)}')" ${!hasUpdatePermission ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''} title="Thu hồi quyền">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:16px; height:16px;">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25(2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                                            </svg>
+                                        </button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        
+                        tbody.innerHTML = html;
+                    }
+
+                    // Xử lý mở modal thêm quyền
+                    let currentModalRoleId = null;
+                    function openAddPermissionModal(roleId, roleName) {
+                        currentModalRoleId = roleId;
+                        document.getElementById('modal-role-name').innerText = roleName;
+                        document.getElementById('modal-role-id').value = roleId;
+                        
+                        const available = rolePermissionsData[roleId].available;
+                        const container = document.getElementById('modal-perms-container');
+                        container.innerHTML = '';
+                        
+                        if (available.length === 0) {
+                            container.innerHTML = `<div style="text-align: center; color: #64748b; padding: 30px 0; font-weight: 500;">Không còn quyền nào khả dụng để thêm (Vai trò này đã sở hữu đầy đủ tất cả các quyền).</div>`;
+                            document.getElementById('btn-save-modal').style.display = 'none';
+                            showModal();
+                            return;
+                        }
+                        
+                        document.getElementById('btn-save-modal').style.display = 'block';
+                        
+                        // Phân nhóm quyền
+                        const groups = {
+                            'Sản phẩm': [],
+                            'Danh mục': [],
+                            'Đơn hàng': [],
+                            'Tài khoản': [],
+                            'Vai trò': [],
+                            'Khác': []
+                        };
+                        
+                        available.forEach(perm => {
+                            const group = groups[perm.Group] ? perm.Group : 'Khác';
+                            groups[group].push(perm);
+                        });
+                        
+                        // Render từng nhóm
+                        const orderedGroups = ['Sản phẩm', 'Danh mục', 'Đơn hàng', 'Tài khoản', 'Vai trò', 'Khác'];
+                        let html = '';
+                        
+                        orderedGroups.forEach(gName => {
+                            const perms = groups[gName];
+                            if (perms.length > 0) {
+                                html += `
+                                    <div class="modal-group-section">
+                                        <div class="modal-group-header">${gName}</div>
+                                        <div class="modal-group-grid">
+                                `;
+                                
+                                perms.forEach(p => {
+                                    html += `
+                                        <label class="perm-checkbox-item" id="chk-item-${p.MaQuyen}">
+                                            <input type="checkbox" name="modal_perm_ids[]" value="${p.MaQuyen}" onchange="toggleCheckboxItemClass(this, ${p.MaQuyen})">
+                                            <div style="display: flex; flex-direction: column; gap: 2px;">
+                                                <span style="font-size: 0.85rem; font-weight: 600; color: #1e293b;">${escapeHtml(p.Action)} <span style="font-size: 0.75rem; color: #94a3b8; font-weight: 400;">(${escapeHtml(p.TenQuyen)})</span></span>
+                                                <span style="font-size: 0.75rem; color: #64748b; line-height: 1.3;">${escapeHtml(p.MoTa)}</span>
+                                            </div>
+                                        </label>
+                                    `;
+                                });
+                                
+                                html += `
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        });
+                        
+                        container.innerHTML = html;
+                        showModal();
+                    }
+
+                    function toggleCheckboxItemClass(checkbox, permId) {
+                        const label = document.getElementById(`chk-item-${permId}`);
+                        if (label) {
+                            if (checkbox.checked) {
+                                label.classList.add('checked');
+                            } else {
+                                label.classList.remove('checked');
+                            }
+                        }
+                    }
+
+                    function showModal() {
+                        const modal = document.getElementById('add-permission-modal');
+                        modal.classList.add('show');
+                    }
+
+                    function closeModal() {
+                        const modal = document.getElementById('add-permission-modal');
+                        modal.classList.remove('show');
+                        currentModalRoleId = null;
+                    }
+
+                    // Xử lý gửi AJAX thêm quyền
+                    function submitAddPermissions() {
+                        if (!currentModalRoleId) return;
+                        
+                        const checkedBoxes = document.querySelectorAll('input[name="modal_perm_ids[]"]:checked');
+                        if (checkedBoxes.length === 0) {
+                            alert('Vui lòng chọn ít nhất một quyền hạn để thêm.');
+                            return;
+                        }
+                        
+                        const permIds = Array.from(checkedBoxes).map(cb => cb.value);
+                        
+                        const formData = new FormData();
+                        formData.append('action', 'add_role_permission');
+                        formData.append('role_id', currentModalRoleId);
+                        formData.append('csrf_token', csrfToken);
+                        permIds.forEach(id => formData.append('perm_ids[]', id));
+                        
+                        const saveBtn = document.getElementById('btn-save-modal');
+                        const originalText = saveBtn.innerText;
+                        saveBtn.innerText = 'Đang lưu...';
+                        saveBtn.disabled = true;
+                        
+                        fetch('admin.php', {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(res => {
+                            saveBtn.innerText = originalText;
+                            saveBtn.disabled = false;
+                            
+                            if (res.status === 'success') {
+                                // Cập nhật local data
+                                rolePermissionsData[currentModalRoleId].assigned = res.assigned;
+                                rolePermissionsData[currentModalRoleId].available = res.available;
+                                
+                                // Vẽ lại UI
+                                renderRolePermissions(currentModalRoleId);
+                                
+                                // Đóng modal
+                                closeModal();
+                                
+                                // Hiển thị toast
+                                showAdminToast(res.message, 'success');
+                            } else {
+                                alert('Lỗi: ' + res.message);
+                            }
+                        })
+                        .catch(err => {
+                            saveBtn.innerText = originalText;
+                            saveBtn.disabled = false;
+                            console.error(err);
+                            alert('Lỗi kết nối hệ thống. Vui lòng thử lại.');
+                        });
+                    }
+
+                    // Xử lý gửi AJAX thu hồi quyền
+                    function removeRolePermission(roleId, permId, permName) {
+                        if (!confirm(`Bạn có chắc chắn muốn thu hồi quyền [ ${permName} ] khỏi vai trò này không?`)) {
+                            return;
+                        }
+                        
+                        const formData = new FormData();
+                        formData.append('action', 'remove_role_permission');
+                        formData.append('role_id', roleId);
+                        formData.append('perm_id', permId);
+                        formData.append('csrf_token', csrfToken);
+                        
+                        fetch('admin.php', {
+                            method: 'POST',
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: formData
+                        })
+                        .then(response => response.json())
+                        .then(res => {
+                            if (res.status === 'success') {
+                                // Cập nhật local data
+                                rolePermissionsData[roleId].assigned = res.assigned;
+                                rolePermissionsData[roleId].available = res.available;
+                                
+                                // Vẽ lại UI
+                                renderRolePermissions(roleId);
+                                
+                                // Hiển thị toast
+                                showAdminToast(res.message, 'success');
+                            } else {
+                                alert('Lỗi: ' + res.message);
+                            }
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            alert('Lỗi kết nối hệ thống. Vui lòng thử lại.');
+                        });
+                    }
+
+                    // Helper escape HTML bảo mật chống XSS
+                    function escapeHtml(string) {
+                        const matchHtmlRegExp = /["'&<>]/;
+                        const str = '' + string;
+                        const match = matchHtmlRegExp.exec(str);
+
+                        if (!match) {
+                            return str;
+                        }
+
+                        let escape;
+                        let html = '';
+                        let index = 0;
+                        let lastIndex = 0;
+
+                        for (index = match.index; index < str.length; index++) {
+                            switch (str.charCodeAt(index)) {
+                                case 34: // "
+                                    escape = '&quot;';
+                                    break;
+                                case 38: // &
+                                    escape = '&amp;';
+                                    break;
+                                case 39: // '
+                                    escape = '&#39;';
+                                    break;
+                                case 60: // <
+                                    escape = '&lt;';
+                                    break;
+                                case 62: // >
+                                    escape = '&gt;';
+                                    break;
+                                default:
+                                    continue;
+                            }
+
+                            if (lastIndex !== index) {
+                                html += str.substring(lastIndex, index);
+                            }
+
+                            lastIndex = index + 1;
+                            html += escape;
+                        }
+
+                        return lastIndex !== index
+                            ? html + str.substring(lastIndex, index)
+                            : html;
+                    }
+
+                    // Hàm hiện thông báo toast nhẹ nhàng
+                    function showAdminToast(message, type = 'success') {
+                        let container = document.getElementById('toast-container');
+                        if (!container) {
+                            container = document.createElement('div');
+                            container.id = 'toast-container';
+                            container.style.position = 'fixed';
+                            container.style.bottom = '24px';
+                            container.style.right = '24px';
+                            container.style.zIndex = '99999';
+                            container.style.display = 'flex';
+                            container.style.flexDirection = 'column';
+                            container.style.gap = '8px';
+                            document.body.appendChild(container);
+                        }
+                        
+                        const toast = document.createElement('div');
+                        toast.style.background = type === 'success' ? '#10b981' : '#ef4444';
+                        toast.style.color = '#ffffff';
+                        toast.style.padding = '12px 24px';
+                        toast.style.borderRadius = '10px';
+                        toast.style.fontSize = '0.9rem';
+                        toast.style.fontWeight = '600';
+                        toast.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1)';
+                        toast.style.transform = 'translateY(20px)';
+                        toast.style.opacity = '0';
+                        toast.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                        toast.innerText = message;
+                        
+                        container.appendChild(toast);
+                        
+                        setTimeout(() => {
+                            toast.style.transform = 'translateY(0)';
+                            toast.style.opacity = '1';
+                        }, 10);
+                        
+                        setTimeout(() => {
+                            toast.style.transform = 'translateY(-20px)';
+                            toast.style.opacity = '0';
+                            setTimeout(() => {
+                                toast.remove();
+                            }, 300);
+                        }, 3000);
+                    }
+                    </script>
                 <?php endif; ?>
             </div>
 
