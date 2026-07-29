@@ -117,6 +117,29 @@ if (isset($_POST['setup'])) {
             $message .= "• Thực thi file migration bảo mật `migration_security.sql` thành công.<br>";
         }
 
+        // Tạo bảng GioHang nếu chưa tồn tại
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `GioHang` (
+                `MaGioHang` INT AUTO_INCREMENT PRIMARY KEY,
+                `MaNguoiDung` INT NOT NULL,
+                `MaSanPham` INT NOT NULL,
+                `SoLuong` INT DEFAULT 1,
+                `NgayThem` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY `unique_user_product` (`MaNguoiDung`, `MaSanPham`),
+                FOREIGN KEY (`MaNguoiDung`) REFERENCES `NguoiDung`(`MaNguoiDung`) ON DELETE CASCADE,
+                FOREIGN KEY (`MaSanPham`) REFERENCES `SanPham`(`MaSanPham`) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        $message .= "• Kiểm tra và tạo bảng `GioHang` thành công.<br>";
+
+        // Kiểm tra và cập nhật bảng DonDanhGiaSanPham để MaDonHang có thể NULL
+        try {
+            $pdo->exec("ALTER TABLE `DonDanhGiaSanPham` MODIFY `MaDonHang` INT NULL;");
+            $message .= "• Cấu hình cột `MaDonHang` trong `DonDanhGiaSanPham` thành NULLable thành công.<br>";
+        } catch (Exception $e) {
+            // Ignore if already nullable or table not created yet
+        }
+
         // Tạo các chỉ mục phụ (Secondary Indexes) nếu chưa tồn tại
         $queries = [
             'idx_sp_duyet_ban_ngaydang' => "CREATE INDEX idx_sp_duyet_ban_ngaydang ON SanPham(TrangThaiDuyet, TrangThaiBan, NgayDang)",

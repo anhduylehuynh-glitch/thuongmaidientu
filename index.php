@@ -442,7 +442,14 @@ if (empty($products) && empty($keyword) && empty($category)) {
 
                 <nav class="nav-menu">
                     <a href="index.php" class="nav-link active">Trang Chủ</a>
-                    <a href="#" class="nav-link">Sản Phẩm</a>
+                    <a href="cart.php" class="nav-link" style="display: flex; align-items: center; gap: 6px; position: relative;">
+                        Giỏ Hàng
+                        <?php $cart_count = getCartItemCount(); if ($cart_count > 0): ?>
+                            <span style="background: var(--primary); color: white; border-radius: 50px; padding: 2px 8px; font-size: 0.75rem; font-weight: 700;">
+                                <?php echo $cart_count; ?>
+                            </span>
+                        <?php endif; ?>
+                    </a>
                     <a href="post_product.php" class="nav-link" style="color: var(--primary); font-weight: 700;">Đăng Bán</a>
 
                     <?php if ($is_logged_in && in_array('ADMIN', $user_roles)): ?>
@@ -470,6 +477,9 @@ if (empty($products) && empty($keyword) && empty($category)) {
                                 </div>
                                 <a href="profile.php" class="dropdown-item">
                                     Hồ sơ cá nhân
+                                </a>
+                                <a href="orders.php" class="dropdown-item">
+                                    Đơn hàng của tôi
                                 </a>
                                 <a href="post_product.php" class="dropdown-item" style="color: var(--primary);">
                                     Đăng bán sản phẩm
@@ -631,7 +641,7 @@ if (empty($products) && empty($keyword) && empty($category)) {
                             $vid_path = htmlspecialchars($prod['VideoThucTe'] ?? '', ENT_QUOTES, 'UTF-8');
                             $seller_id_val = $prod['MaNguoiBan'] ?? $prod['MaSanPham'] ?? 1;
                         ?>
-                        <div class="product-card" onclick="openProductModal('<?php echo addslashes(htmlspecialchars($prod['TenSanPham'])); ?>', '<?php echo number_format($prod['GiaBan'], 0, ',', '.'); ?> đ', '<?php echo addslashes(htmlspecialchars($prod['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($prod['TinhTrang'])); ?>', '<?php echo addslashes(htmlspecialchars($prod['TenNguoiBan'])); ?>', '<?php echo $prod['DiemUyTin']; ?>', '<?php echo addslashes(htmlspecialchars($prod['MoTaChiTiet'] ?? 'Chưa có mô tả')); ?>', '<?php echo $img_list_json; ?>', '<?php echo $vid_path; ?>', '<?php echo $seller_id_val; ?>', '<?php echo addslashes(htmlspecialchars($prod['DuongDanAnh'] ?? '')); ?>')" style="cursor: pointer;">
+                        <div class="product-card" onclick="openProductModal('<?php echo addslashes(htmlspecialchars($prod['TenSanPham'])); ?>', '<?php echo number_format($prod['GiaBan'], 0, ',', '.'); ?> đ', '<?php echo addslashes(htmlspecialchars($prod['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($prod['TinhTrang'])); ?>', '<?php echo addslashes(htmlspecialchars($prod['TenNguoiBan'])); ?>', '<?php echo $prod['DiemUyTin']; ?>', '<?php echo addslashes(htmlspecialchars($prod['MoTaChiTiet'] ?? 'Chưa có mô tả')); ?>', '<?php echo $img_list_json; ?>', '<?php echo $vid_path; ?>', '<?php echo $seller_id_val; ?>', '<?php echo addslashes(htmlspecialchars($prod['DuongDanAnh'] ?? '')); ?>', '<?php echo $prod['MaSanPham']; ?>')" style="cursor: pointer;">
                             <div class="product-image-container">
                                 <?php if (!empty($prod['DuongDanAnh'])): ?>
                                     <img src="<?php echo htmlspecialchars($prod['DuongDanAnh']); ?>" alt="Product" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: cover;">
@@ -655,7 +665,7 @@ if (empty($products) && empty($keyword) && empty($category)) {
                                 <a href="javascript:void(0)" class="product-title"><?php echo htmlspecialchars($prod['TenSanPham']); ?></a>
                                 <div class="product-price"><?php echo number_format($prod['GiaBan'], 0, ',', '.'); ?> đ</div>
 
-                                <div class="product-footer">
+                                <div class="product-footer" style="margin-bottom: 10px;">
                                     <a href="seller.php?id=<?php echo $seller_id_val; ?>" onclick="event.stopPropagation();" title="Xem trang người bán" style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 8px;">
                                         <div class="seller-info">
                                             <?php if (!empty($prod['SellerAvatar'])): ?>
@@ -669,6 +679,12 @@ if (empty($products) && empty($keyword) && empty($category)) {
                                         </div>
                                     </a>
                                     <span class="seller-reputation"><?php echo htmlspecialchars($prod['DiemUyTin']); ?> Uy Tín</span>
+                                </div>
+
+                                <div style="display: flex; gap: 8px;">
+                                    <a href="product_detail.php?id=<?php echo $prod['MaSanPham']; ?>" onclick="event.stopPropagation();" class="btn btn-outline" style="border-radius: 50px; font-size: 0.8rem; padding: 6px 12px; flex: 1; text-align: center; text-decoration: none; font-weight: 600;">
+                                        Xem Chi Tiết
+                                    </a>
                                 </div>
                             </div>
                         </div>
@@ -711,9 +727,9 @@ if (empty($products) && empty($keyword) && empty($category)) {
                         <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 8px;">Mô tả sản phẩm:</h4>
                         <div id="modal_desc" style="font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; white-space: pre-line; max-height: 180px; overflow-y: auto;"></div>
 
-                        <div style="display: flex; gap: 10px; margin-top: 20px;">
-                            <button onclick="alert('Tính năng liên hệ người mua/đặt hàng đang mở rộng!')" class="btn btn-primary" style="border-radius: 50px; flex: 1;">Liên Hệ Người Bán</button>
-                            <a href="#" id="modal_store_btn" class="btn btn-outline" style="border-radius: 50px; text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center; padding: 0 16px; font-size: 0.9rem; font-weight: 600;">Xem Cửa Hàng</a>
+                        <div style="display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap;">
+                            <a href="#" id="modal_detail_btn" class="btn btn-primary" style="border-radius: 50px; flex: 1; text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; font-size: 0.9rem; font-weight: 600;">Xem Chi Tiết Trang Riêng ➔</a>
+                            <a href="#" id="modal_store_btn" class="btn btn-outline" style="border-radius: 50px; text-decoration: none; text-align: center; display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; font-size: 0.9rem; font-weight: 600;">Xem Cửa Hàng</a>
                         </div>
                     </div>
                 </div>
@@ -755,7 +771,7 @@ if (empty($products) && empty($keyword) && empty($category)) {
             });
         }
 
-        function openProductModal(title, price, cat, cond, seller, rep, desc, imagesJson, videoPath, sellerId, mainImg) {
+        function openProductModal(title, price, cat, cond, seller, rep, desc, imagesJson, videoPath, sellerId, mainImg, prodId) {
             document.getElementById('modal_title').textContent = title;
             document.getElementById('modal_price').textContent = price;
             document.getElementById('modal_cat').textContent = cat;
@@ -766,9 +782,14 @@ if (empty($products) && empty($keyword) && empty($category)) {
 
             const sellerLink = document.getElementById('modal_seller_link');
             const storeBtn = document.getElementById('modal_store_btn');
+            const detailBtn = document.getElementById('modal_detail_btn');
+            
             if (sellerId) {
                 sellerLink.href = 'seller.php?id=' + sellerId;
                 storeBtn.href = 'seller.php?id=' + sellerId;
+            }
+            if (prodId) {
+                detailBtn.href = 'product_detail.php?id=' + prodId;
             }
 
             const largeImg = document.getElementById('modal_large_img');

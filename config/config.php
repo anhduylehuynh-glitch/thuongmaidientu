@@ -56,8 +56,8 @@ define('DB_NAME', 'thuongmaidientu');
 // CẤU HÌNH GOOGLE OAUTH 2.0
 // ============================================================================
 // HƯỚNG DẪN: Hãy thay thế bằng Client ID & Client Secret thực tế của bạn
-//define('GOOGLE_CLIENT_ID', 's');
-//define('GOOGLE_CLIENT_SECRET', 's');
+define('GOOGLE_CLIENT_ID', '387083096653-p1dpa5ml937fqe1tdefchcjohgh2p299.apps.googleusercontent.com');
+define('GOOGLE_CLIENT_SECRET', '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');
 
 // Đường dẫn nhận phản hồi (Redirect URI) từ Google (Tự động nhận diện cổng và đường dẫn linh hoạt)
 $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -93,3 +93,29 @@ function getDBConnection()
         throw new Exception("Kết nối database thất bại (Cổng: " . DB_PORT . "): " . $e->getMessage());
     }
 }
+
+/**
+ * Hàm lấy tổng số lượng sản phẩm trong giỏ hàng hiện tại
+ */
+function getCartItemCount()
+{
+    if (isset($_SESSION['user_id'])) {
+        try {
+            $db = getDBConnection();
+            $stmt = $db->prepare("SELECT SUM(SoLuong) FROM GioHang WHERE MaNguoiDung = :uid");
+            $stmt->execute(['uid' => $_SESSION['user_id']]);
+            $count = $stmt->fetchColumn();
+            return $count ? (int)$count : 0;
+        } catch (Exception $e) {
+            return 0;
+        }
+    } else {
+        $cart = $_SESSION['cart'] ?? [];
+        $total = 0;
+        foreach ($cart as $qty) {
+            $total += (int)$qty;
+        }
+        return $total;
+    }
+}
+

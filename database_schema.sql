@@ -311,17 +311,29 @@ CREATE TABLE DonKhieuNaiTraHang (
     FOREIGN KEY (MaNguoiKhieuNai) REFERENCES NguoiDung(MaNguoiDung)
 );
 
+-- Bảng Giỏ Hàng (Cart)
+CREATE TABLE GioHang (
+    MaGioHang INT AUTO_INCREMENT PRIMARY KEY,
+    MaNguoiDung INT NOT NULL,
+    MaSanPham INT NOT NULL,
+    SoLuong INT DEFAULT 1,
+    NgayThem TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user_product (MaNguoiDung, MaSanPham),
+    FOREIGN KEY (MaNguoiDung) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE,
+    FOREIGN KEY (MaSanPham) REFERENCES SanPham(MaSanPham) ON DELETE CASCADE
+);
+
 -- Bảng Đánh giá sản phẩm
 CREATE TABLE DonDanhGiaSanPham (
     MaDanhGia INT AUTO_INCREMENT PRIMARY KEY,
-    MaDonHang INT NOT NULL,
+    MaDonHang INT NULL,
     MaSanPham INT NOT NULL,
     MaNguoiDanhGia INT NOT NULL, -- Người mua đánh giá
     SoSao INT NOT NULL CHECK (SoSao BETWEEN 1 AND 5),
-    NhanXet VARCHAR(200) NULL,
+    NhanXet TEXT NULL,
     NgayDanhGia TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (MaDonHang, MaSanPham) REFERENCES ChiTietDonHang(MaDonHang, MaSanPham) ON DELETE CASCADE,
-    FOREIGN KEY (MaNguoiDanhGia) REFERENCES NguoiDung(MaNguoiDung)
+    FOREIGN KEY (MaSanPham) REFERENCES SanPham(MaSanPham) ON DELETE CASCADE,
+    FOREIGN KEY (MaNguoiDanhGia) REFERENCES NguoiDung(MaNguoiDung) ON DELETE CASCADE
 );
 
 -- ----------------------------------------------------------------------------
