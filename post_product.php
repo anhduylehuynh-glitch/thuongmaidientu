@@ -14,11 +14,11 @@ $success = '';
 
 try {
     $db = getDBConnection();
-    $session_user = $_SESSION['user'];
+    $user_id = $_SESSION['user_id'];
 
     // Truy vấn dữ liệu người dùng mới nhất
     $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
-    $stmt->execute(['id' => $session_user['MaNguoiDung']]);
+    $stmt->execute(['id' => $user_id]);
     $user_data = $stmt->fetch();
 
     if (!$user_data) {
@@ -138,6 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $price = (float)($_POST['price'] ?? 0);
         $condition = trim($_POST['condition'] ?? 'Mới 99%');
         $weight = (float)($_POST['weight'] ?? 0.5);
+        $stock_quantity = max(1, (int)($_POST['stock_quantity'] ?? 1));
         $description = trim($_POST['description'] ?? '');
         $image_url_input = trim($_POST['image_url'] ?? '');
 
@@ -208,9 +209,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         // 3. Đăng sản phẩm vào bảng SanPham (Trạng thái mặc định: Chờ Admin kiểm duyệt b'00')
         $ins_prod = $db->prepare("INSERT INTO `SanPham` 
-            (`MaNguoiBan`, `MaDanhMuc`, `TenSanPham`, `MoTaChiTiet`, `TinhTrang`, `KhoiLuong_Kg`, `GiaBan`, `VideoThucTe`, `TrangThaiDuyet`, `TrangThaiBan`) 
+            (`MaNguoiBan`, `MaDanhMuc`, `TenSanPham`, `MoTaChiTiet`, `TinhTrang`, `KhoiLuong_Kg`, `GiaBan`, `SoLuongTon`, `VideoThucTe`, `TrangThaiDuyet`, `TrangThaiBan`) 
             VALUES 
-            (:seller_id, :cat_id, :title, :desc, :cond, :weight, :price, :video, b'00', b'00')");
+            (:seller_id, :cat_id, :title, :desc, :cond, :weight, :price, :stock_qty, :video, b'00', b'00')");
 
         $ins_prod->execute([
             'seller_id' => $user_data['MaNguoiDung'],
@@ -220,6 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             'cond' => $condition,
             'weight' => $weight,
             'price' => $price,
+            'stock_qty' => $stock_quantity,
             'video' => !empty($uploaded_video_path) ? $uploaded_video_path : null
         ]);
 
@@ -542,6 +544,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <div class="form-group">
                                 <label for="weight">Khối lượng ước tính (Kg) *</label>
                                 <input type="number" id="weight" name="weight" class="form-control" placeholder="VD: 0.5" step="0.1" min="0.1" value="0.5" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="stock_quantity">Số lượng trong kho *</label>
+                                <input type="number" id="stock_quantity" name="stock_quantity" class="form-control" placeholder="VD: 1" min="1" step="1" value="1" required>
                             </div>
                         </div>
 

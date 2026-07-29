@@ -132,6 +132,15 @@ if (isset($_POST['setup'])) {
         ");
         $message .= "• Kiểm tra và tạo bảng `GioHang` thành công.<br>";
 
+        // Kiểm tra và bổ sung cột SoLuongTon vào bảng SanPham
+        $col_soluong_chk = $pdo->query("SHOW COLUMNS FROM `SanPham` LIKE 'SoLuongTon'");
+        if ($col_soluong_chk->rowCount() === 0) {
+            $pdo->exec("ALTER TABLE `SanPham` ADD COLUMN `SoLuongTon` INT DEFAULT 1 AFTER `GiaBan`;");
+            $message .= "• Thêm cột `SoLuongTon` vào bảng `SanPham` thành công.<br>";
+        } else {
+            $message .= "• Cột `SoLuongTon` đã tồn tại.<br>";
+        }
+
         // Kiểm tra và cập nhật bảng DonDanhGiaSanPham để MaDonHang có thể NULL
         try {
             $pdo->exec("ALTER TABLE `DonDanhGiaSanPham` MODIFY `MaDonHang` INT NULL;");

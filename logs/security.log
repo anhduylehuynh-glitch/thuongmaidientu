@@ -66,3 +66,9 @@
 [2026-07-29 10:44:31] [IP: ::1] User ID 2 logged in via Google OAuth successfully
 [2026-07-29 11:02:59] [IP: ::1] Session timeout (idle) for User ID: 2
 [2026-07-29 11:03:33] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-29 11:26:17] [IP: ::1] User ID 1 logged out successfully
+[2026-07-29 11:26:31] [IP: ::1] User ID 2 logged in via Google OAuth successfully
+[2026-07-29 11:27:17] [IP: ::1] User ID 2 logged out successfully
+[2026-07-29 11:27:28] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-07-29 11:28:22] [IP: ::1] User ID 1 logged out successfully
+[2026-07-29 11:28:30] [IP: ::1] User ID 2 logged in via Google OAuth successfully

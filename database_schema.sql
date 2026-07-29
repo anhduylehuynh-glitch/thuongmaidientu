@@ -136,6 +136,7 @@ CREATE TABLE SanPham (
     TinhTrang VARCHAR(50) NOT NULL, -- VD: 'Mới nguyên seal', 'Mới 99%', 'Cũ xước nhẹ',...
     KhoiLuong_Kg DECIMAL(6, 2) NOT NULL, -- Phục vụ tính phí vận chuyển theo khối lượng
     GiaBan DECIMAL(15, 2) NOT NULL,
+    SoLuongTon INT DEFAULT 1, -- Số lượng hàng còn lại trong kho
     VideoThucTe VARCHAR(255) NULL, -- Link video chứng minh thực trạng sản phẩm
     TrangThaiDuyet BIT(2) DEFAULT b'00', -- b'00': Chờ duyệt, b'01': Đã duyệt, b'10': Từ chối
     TrangThaiBan BIT(2) DEFAULT b'00', -- b'00': Sẵn sàng, b'01': Đang giao dịch, b'10': Đã bán, b'11': Đã ẩn

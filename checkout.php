@@ -114,71 +114,119 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']) 
             $db = getDBConnection();
             $db->beginTransaction();
 
-            // Find or Create User if guest
-            $buyer_id = $user_id;
-            if (!$is_logged_in) {
-                // Check if user exists by phone/email or create temporary buyer
-                $chk = $db->prepare("SELECT MaNguoiDung FROM NguoiDung WHERE SoDienThoai = :phone LIMIT 1");
-                $chk->execute(['phone' => $so_dien_thoai]);
-                $buyer_id = $chk->fetchColumn();
+            // 1. Kiểm tra tồn kho hàng khóa FOR UPDATE chống tranh chấp đồng thời (Race condition)
+            $chk_stock_stmt = $db->prepare("SELECT MaSanPham, TenSanPham, SoLuongTon, TrangThaiBan FROM SanPham WHERE MaSanPham = :pid FOR UPDATE");
+            $out_of_stock_found = false;
 
-                if (!$buyer_id) {
-                    $ins_u = $db->prepare("INSERT INTO NguoiDung (TenDangNhap, HoTen, SoDienThoai) VALUES (:username, :name, :phone)");
-                    $ins_u->execute([
-                        'username' => 'guest_' . time() . rand(100, 999),
-                        'name' => $ho_ten,
-                        'phone' => $so_dien_thoai
-                    ]);
-                    $buyer_id = $db->lastInsertId();
-                }
-            }
-
-            // Create Address record in SoDiaChi
-            $ins_addr = $db->prepare("INSERT INTO SoDiaChi (MaNguoiDung, DiaChiChiTiet, ViDo, KinhDo) VALUES (:uid, :addr, 10.762622, 106.660172)");
-            $ins_addr->execute(['uid' => $buyer_id, 'addr' => $dia_chi]);
-            $addr_id = $db->lastInsertId();
-
-            // Create Order
-            $ins_order = $db->prepare("
-                INSERT INTO DonHang (MaNguoiMua, MaDiaChiGiao, PhuongThucThanhToan, TongTienThanhToan, TrangThaiDonHang, TrangThaiThanhToan)
-                VALUES (:buyer, :addr, :pt, :total, b'000', b'000')
-            ");
-            $ins_order->execute([
-                'buyer' => $buyer_id,
-                'addr' => $addr_id,
-                'pt' => $phuong_thuc,
-                'total' => $total_pay
-            ]);
-            $order_id = $db->lastInsertId();
-
-            // Create Order Details
-            $ins_detail = $db->prepare("
-                INSERT INTO ChiTietDonHang (MaDonHang, MaSanPham, SoLuong, GiaChotMua, PhiShipGoc, PhiShipThucTe)
-                VALUES (:oid, :pid, :qty, :gia, :ship_goc, :ship_tt)
-            ");
             foreach ($cart_items as $item) {
-                $ins_detail->execute([
-                    'oid' => $order_id,
-                    'pid' => $item['MaSanPham'],
-                    'qty' => $item['SoLuong'],
-                    'gia' => $item['GiaBan'],
-                    'ship_goc' => 15000,
-                    'ship_tt' => 15000
-                ]);
-            }
+                $chk_stock_stmt->execute(['pid' => $item['MaSanPham']]);
+                $prod_db = $chk_stock_stmt->fetch();
 
-            // Clear Cart if order placed from cart
-            if ($direct_sp == 0) {
-                if ($is_logged_in) {
-                    $del_cart = $db->prepare("DELETE FROM GioHang WHERE MaNguoiDung = :uid");
-                    $del_cart->execute(['uid' => $user_id]);
-                } else {
-                    unset($_SESSION['cart']);
+                $stock_now = $prod_db ? (int)$prod_db['SoLuongTon'] : 0;
+                $req_qty = (int)$item['SoLuong'];
+
+                if (!$prod_db || $stock_now < $req_qty) {
+                    $out_of_stock_found = true;
+                    $db->rollBack();
+
+                    // Xóa sản phẩm hết hàng hoặc thiếu số lượng khỏi giỏ hàng của người dùng này
+                    if ($is_logged_in) {
+                        $del_cart_item = $db->prepare("DELETE FROM GioHang WHERE MaNguoiDung = :uid AND MaSanPham = :pid");
+                        $del_cart_item->execute(['uid' => $user_id, 'pid' => $item['MaSanPham']]);
+                    } else {
+                        unset($_SESSION['cart'][$item['MaSanPham']]);
+                    }
+
+                    $p_name = htmlspecialchars($item['TenSanPham']);
+                    if ($stock_now <= 0) {
+                        $error_msg = "Rất tiếc! Sản phẩm \"{$p_name}\" đã được người mua khác thanh toán xong trước và vừa hết hàng. Sản phẩm đã tự động được xóa khỏi giỏ hàng của bạn.";
+                    } else {
+                        $error_msg = "Rất tiếc! Sản phẩm \"{$p_name}\" vừa được người mua khác thanh toán trước, số lượng trong kho hiện chỉ còn {$stock_now} (bạn yêu cầu {$req_qty}). Vui lòng kiểm tra lại giỏ hàng.";
+                    }
+                    break;
                 }
             }
 
-            $db->commit();
-            $order_created = true;
+            if (!$out_of_stock_found) {
+                // Find or Create User if guest
+                $buyer_id = $user_id;
+                if (!$is_logged_in) {
+                    $chk = $db->prepare("SELECT MaNguoiDung FROM NguoiDung WHERE SoDienThoai = :phone LIMIT 1");
+                    $chk->execute(['phone' => $so_dien_thoai]);
+                    $buyer_id = $chk->fetchColumn();
+
+                    if (!$buyer_id) {
+                        $ins_u = $db->prepare("INSERT INTO NguoiDung (TenDangNhap, HoTen, SoDienThoai) VALUES (:username, :name, :phone)");
+                        $ins_u->execute([
+                            'username' => 'guest_' . time() . rand(100, 999),
+                            'name' => $ho_ten,
+                            'phone' => $so_dien_thoai
+                        ]);
+                        $buyer_id = $db->lastInsertId();
+                    }
+                }
+
+                // Create Address record in SoDiaChi
+                $ins_addr = $db->prepare("INSERT INTO SoDiaChi (MaNguoiDung, DiaChiChiTiet, ViDo, KinhDo) VALUES (:uid, :addr, 10.762622, 106.660172)");
+                $ins_addr->execute(['uid' => $buyer_id, 'addr' => $dia_chi]);
+                $addr_id = $db->lastInsertId();
+
+                // Create Order
+                $ins_order = $db->prepare("
+                    INSERT INTO DonHang (MaNguoiMua, MaDiaChiGiao, PhuongThucThanhToan, TongTienThanhToan, TrangThaiDonHang, TrangThaiThanhToan)
+                    VALUES (:buyer, :addr, :pt, :total, b'000', b'000')
+                ");
+                $ins_order->execute([
+                    'buyer' => $buyer_id,
+                    'addr' => $addr_id,
+                    'pt' => $phuong_thuc,
+                    'total' => $total_pay
+                ]);
+                $order_id = $db->lastInsertId();
+
+                // Create Order Details & Deduct Stock
+                $ins_detail = $db->prepare("
+                    INSERT INTO ChiTietDonHang (MaDonHang, MaSanPham, SoLuong, GiaChotMua, PhiShipGoc, PhiShipThucTe)
+                    VALUES (:oid, :pid, :qty, :gia, :ship_goc, :ship_tt)
+                ");
+
+                $upd_stock = $db->prepare("
+                    UPDATE SanPham 
+                    SET SoLuongTon = SoLuongTon - :qty,
+                        TrangThaiBan = CASE WHEN (SoLuongTon - :qty2) <= 0 THEN b'10' ELSE TrangThaiBan END
+                    WHERE MaSanPham = :pid
+                ");
+
+                foreach ($cart_items as $item) {
+                    $ins_detail->execute([
+                        'oid' => $order_id,
+                        'pid' => $item['MaSanPham'],
+                        'qty' => $item['SoLuong'],
+                        'gia' => $item['GiaBan'],
+                        'ship_goc' => 15000,
+                        'ship_tt' => 15000
+                    ]);
+
+                    $upd_stock->execute([
+                        'qty' => $item['SoLuong'],
+                        'qty2' => $item['SoLuong'],
+                        'pid' => $item['MaSanPham']
+                    ]);
+                }
+
+                // Clear Cart if order placed from cart
+                if ($direct_sp == 0) {
+                    if ($is_logged_in) {
+                        $del_cart = $db->prepare("DELETE FROM GioHang WHERE MaNguoiDung = :uid");
+                        $del_cart->execute(['uid' => $user_id]);
+                    } else {
+                        unset($_SESSION['cart']);
+                    }
+                }
+
+                $db->commit();
+                $order_created = true;
+            }
         } catch (Exception $e) {
             if (isset($db) && $db->inTransaction()) {
                 $db->rollBack();

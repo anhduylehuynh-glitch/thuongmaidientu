@@ -31,20 +31,43 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $pid = (int)($_POST['product_id'] ?? 0);
         $qty = max(1, (int)($_POST['quantity'] ?? 1));
         
-        if ($is_logged_in) {
-            try {
-                $db = getDBConnection();
+        try {
+            $db = getDBConnection();
+            $chk_stock = $db->prepare("SELECT SoLuongTon FROM SanPham WHERE MaSanPham = :pid");
+            $chk_stock->execute(['pid' => $pid]);
+            $stock_avail = (int)$chk_stock->fetchColumn();
+
+            if ($stock_avail <= 0) {
+                // Delete out of stock product from cart
+                if ($is_logged_in) {
+                    $del_stmt = $db->prepare("DELETE FROM GioHang WHERE MaNguoiDung = :uid AND MaSanPham = :pid");
+                    $del_stmt->execute(['uid' => $user_data['MaNguoiDung'], 'pid' => $pid]);
+                } else {
+                    unset($_SESSION['cart'][$pid]);
+                }
+                $_SESSION['flash_error'] = "Sản phẩm đã hết hàng trong kho và tự động xóa khỏi giỏ!";
+                header("Location: cart.php");
+                exit;
+            }
+
+            if ($qty > $stock_avail) {
+                $_SESSION['flash_error'] = "Số lượng vượt quá tồn kho! (Hiện trong kho chỉ còn {$stock_avail} sản phẩm).";
+                header("Location: cart.php");
+                exit;
+            }
+
+            if ($is_logged_in) {
                 $stmt = $db->prepare("UPDATE GioHang SET SoLuong = :qty WHERE MaNguoiDung = :uid AND MaSanPham = :pid");
                 $stmt->execute(['qty' => $qty, 'uid' => $user_data['MaNguoiDung'], 'pid' => $pid]);
                 $_SESSION['flash_success'] = "Đã cập nhật số lượng!";
-            } catch (Exception $e) {
-                $_SESSION['flash_error'] = "Lỗi cập nhật: " . $e->getMessage();
+            } else {
+                if (isset($_SESSION['cart'][$pid])) {
+                    $_SESSION['cart'][$pid] = $qty;
+                    $_SESSION['flash_success'] = "Đã cập nhật số lượng!";
+                }
             }
-        } else {
-            if (isset($_SESSION['cart'][$pid])) {
-                $_SESSION['cart'][$pid] = $qty;
-                $_SESSION['flash_success'] = "Đã cập nhật số lượng!";
-            }
+        } catch (Exception $e) {
+            $_SESSION['flash_error'] = "Lỗi cập nhật: " . $e->getMessage();
         }
         header("Location: cart.php");
         exit;
@@ -95,7 +118,7 @@ if ($is_logged_in) {
     try {
         $db = getDBConnection();
         $stmt = $db->prepare("
-            SELECT gh.MaGioHang, gh.SoLuong, gh.MaSanPham, sp.TenSanPham, sp.GiaBan, sp.TinhTrang, sp.KhoiLuong_Kg, sp.MaNguoiBan, nd.HoTen as TenNguoiBan,
+            SELECT gh.MaGioHang, gh.SoLuong, gh.MaSanPham, sp.TenSanPham, sp.GiaBan, sp.TinhTrang, sp.KhoiLuong_Kg, sp.SoLuongTon, sp.MaNguoiBan, nd.HoTen as TenNguoiBan,
                    (SELECT DuongDanAnh FROM HinhAnhSP WHERE MaSanPham = sp.MaSanPham ORDER BY AnhChinh DESC, MaHinhAnh ASC LIMIT 1) as DuongDanAnh
             FROM GioHang gh
             JOIN SanPham sp ON gh.MaSanPham = sp.MaSanPham

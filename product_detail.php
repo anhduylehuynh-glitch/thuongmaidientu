@@ -48,9 +48,36 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if ($action === 'add_to_cart' || $action === 'buy_now') {
         $qty = max(1, (int)($_POST['quantity'] ?? 1));
         
-        if ($is_logged_in) {
-            try {
-                $db = getDBConnection();
+        try {
+            $db = getDBConnection();
+            $chk_stock = $db->prepare("SELECT SoLuongTon, TrangThaiBan FROM SanPham WHERE MaSanPham = :pid");
+            $chk_stock->execute(['pid' => $product_id]);
+            $prod_stock = $chk_stock->fetch();
+
+            $stock_available = $prod_stock ? (int)($prod_stock['SoLuongTon'] ?? 1) : 1;
+            $current_in_cart = 0;
+
+            if ($is_logged_in) {
+                $cart_chk = $db->prepare("SELECT SoLuong FROM GioHang WHERE MaNguoiDung = :uid AND MaSanPham = :pid");
+                $cart_chk->execute(['uid' => $user_data['MaNguoiDung'], 'pid' => $product_id]);
+                $current_in_cart = (int)$cart_chk->fetchColumn();
+            } else {
+                $current_in_cart = (int)($_SESSION['cart'][$product_id] ?? 0);
+            }
+
+            if ($stock_available <= 0) {
+                $_SESSION['flash_error'] = "Sản phẩm này đã hết hàng trong kho!";
+                header("Location: product_detail.php?id=" . $product_id);
+                exit;
+            }
+
+            if (($current_in_cart + $qty) > $stock_available) {
+                $_SESSION['flash_error'] = "Số lượng trong kho không đủ! (Kho còn {$stock_available} sản phẩm, giỏ của bạn đã có {$current_in_cart}).";
+                header("Location: product_detail.php?id=" . $product_id);
+                exit;
+            }
+
+            if ($is_logged_in) {
                 $stmt = $db->prepare("
                     INSERT INTO GioHang (MaNguoiDung, MaSanPham, SoLuong)
                     VALUES (:uid, :pid, :qty)
@@ -63,15 +90,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     'qty2' => $qty
                 ]);
                 $_SESSION['flash_success'] = "Đã thêm sản phẩm vào giỏ hàng!";
-            } catch (Exception $e) {
-                $_SESSION['flash_error'] = "Không thể thêm vào giỏ hàng: " . $e->getMessage();
+            } else {
+                if (!isset($_SESSION['cart'])) {
+                    $_SESSION['cart'] = [];
+                }
+                $_SESSION['cart'][$product_id] = ($_SESSION['cart'][$product_id] ?? 0) + $qty;
+                $_SESSION['flash_success'] = "Đã thêm sản phẩm vào giỏ hàng!";
             }
-        } else {
-            if (!isset($_SESSION['cart'])) {
-                $_SESSION['cart'] = [];
-            }
-            $_SESSION['cart'][$product_id] = ($_SESSION['cart'][$product_id] ?? 0) + $qty;
-            $_SESSION['flash_success'] = "Đã thêm sản phẩm vào giỏ hàng!";
+        } catch (Exception $e) {
+            $_SESSION['flash_error'] = "Lỗi xử lý giỏ hàng: " . $e->getMessage();
         }
         
         if ($action === 'buy_now') {
@@ -523,6 +550,7 @@ $cart_count = getCartItemCount();
                     <div style="margin-bottom: 20px; font-size: 0.95rem; color: var(--text-muted); line-height: 1.8;">
                         <div>Tình trạng: <strong style="color: var(--text-main);"><?php echo htmlspecialchars($product['TinhTrang']); ?></strong></div>
                         <div>Khối lượng đóng gói: <strong style="color: var(--text-main);"><?php echo htmlspecialchars($product['KhoiLuong_Kg'] ?? '0.5'); ?> kg</strong></div>
+                        <div>Số lượng trong kho: <strong style="color: var(--primary);"><?php echo (int)($product['SoLuongTon'] ?? 1); ?> sản phẩm</strong></div>
                     </div>
 
                     <!-- Seller Info -->
