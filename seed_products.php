@@ -76,7 +76,7 @@ try {
     ];
 
     $conditions = ['Mới 99%', 'Mới 95%', 'Đã sử dụng (Tốt)', 'Hơi cũ', 'Như mới (Likenew)'];
-    $approval_statuses = [0, 1, 2]; // 0: chờ duyệt, 1: đã duyệt, 2: đã cấm
+    $approval_statuses = [1]; // 1: đã duyệt (mặc định cho seed data để hiển thị ngay trên trang chủ)
 
     // Bắt đầu Transaction để chèn nhanh và an toàn
     $db->beginTransaction();

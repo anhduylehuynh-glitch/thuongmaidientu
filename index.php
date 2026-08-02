@@ -66,60 +66,91 @@ if (empty($categories)) {
     ];
 }
 
-// Xử lý tham số tìm kiếm, lọc danh mục và sắp xếp
+// Xử lý tham số tìm kiếm, lọc danh mục, sắp xếp và phân trang OFFSET / LIMIT
 $keyword = trim($_GET['keyword'] ?? '');
 $category = trim($_GET['category'] ?? '');
 $sort = trim($_GET['sort'] ?? 'newest');
 
+$page = max(1, (int)($_GET['page'] ?? 1));
+$limit = 12; // 12 sản phẩm trên mỗi trang
+$offset = ($page - 1) * $limit;
+
 $products = [];
+$total_products_count = 0;
+$total_pages = 1;
+
 try {
     $db = getDBConnection();
     
-    $sql = "
-        SELECT sp.*, nd.HoTen as TenNguoiBan, nd.DiemUyTin, nd.google_picture as SellerAvatar, dm.TenDanhMuc
-        FROM SanPham sp
-        JOIN NguoiDung nd ON sp.MaNguoiBan = nd.MaNguoiDung
-        JOIN DanhMuc dm ON sp.MaDanhMuc = dm.MaDanhMuc
-        WHERE sp.TrangThaiDuyet = b'01' AND sp.TrangThaiBan = b'00'
-    ";
-    
+    $where_clause = " WHERE (sp.TrangThaiDuyet = b'01' OR sp.TrangThaiDuyet = 1 OR sp.TrangThaiDuyet = '1') AND (sp.TrangThaiBan = b'00' OR sp.TrangThaiBan = 0 OR sp.TrangThaiBan = '0')";
     $params = [];
     
     if (!empty($keyword)) {
-        $sql .= " AND (sp.TenSanPham LIKE :kw OR sp.MoTaChiTiet LIKE :kw OR dm.TenDanhMuc LIKE :kw)";
+        $where_clause .= " AND (sp.TenSanPham LIKE :kw OR sp.MoTaChiTiet LIKE :kw OR dm.TenDanhMuc LIKE :kw)";
         $params['kw'] = '%' . $keyword . '%';
     }
     
     if (!empty($category)) {
         if (is_numeric($category)) {
-            $sql .= " AND sp.MaDanhMuc = :cat_id";
+            $where_clause .= " AND sp.MaDanhMuc = :cat_id";
             $params['cat_id'] = (int)$category;
         } else {
-            $sql .= " AND dm.TenDanhMuc = :cat_name";
+            $where_clause .= " AND dm.TenDanhMuc = :cat_name";
             $params['cat_name'] = $category;
         }
     }
+
+    // 1. Đếm tổng số sản phẩm trùng khớp bộ lọc
+    $count_sql = "
+        SELECT COUNT(*) 
+        FROM SanPham sp
+        JOIN DanhMuc dm ON sp.MaDanhMuc = dm.MaDanhMuc
+        $where_clause
+    ";
+    $count_stmt = $db->prepare($count_sql);
+    $count_stmt->execute($params);
+    $total_products_count = (int)$count_stmt->fetchColumn();
+    $total_pages = max(1, (int)ceil($total_products_count / $limit));
+
+    if ($page > $total_pages && $total_pages > 0) {
+        $page = $total_pages;
+        $offset = ($page - 1) * $limit;
+    }
     
+    // 2. Truy vấn danh sách sản phẩm theo OFFSET & LIMIT (tận dụng Index B-Tree)
+    $sql = "
+        SELECT sp.*, nd.HoTen as TenNguoiBan, nd.DiemUyTin, nd.google_picture as SellerAvatar, dm.TenDanhMuc
+        FROM SanPham sp
+        JOIN NguoiDung nd ON sp.MaNguoiBan = nd.MaNguoiDung
+        JOIN DanhMuc dm ON sp.MaDanhMuc = dm.MaDanhMuc
+        $where_clause
+    ";
+
     switch ($sort) {
         case 'oldest':
-            $sql .= " ORDER BY sp.NgayDang ASC";
+            $sql .= " ORDER BY sp.NgayDang ASC, sp.MaSanPham ASC";
             break;
         case 'price_asc':
-            $sql .= " ORDER BY sp.GiaBan ASC";
+            $sql .= " ORDER BY sp.GiaBan ASC, sp.MaSanPham DESC";
             break;
         case 'price_desc':
-            $sql .= " ORDER BY sp.GiaBan DESC";
+            $sql .= " ORDER BY sp.GiaBan DESC, sp.MaSanPham DESC";
             break;
         case 'newest':
         default:
-            $sql .= " ORDER BY sp.NgayDang DESC";
+            $sql .= " ORDER BY sp.NgayDang DESC, sp.MaSanPham DESC";
             break;
     }
     
-    $sql .= " LIMIT 24";
+    $sql .= " LIMIT :limit OFFSET :offset";
     
     $stmt = $db->prepare($sql);
-    $stmt->execute($params);
+    foreach ($params as $key => $val) {
+        $stmt->bindValue(':' . $key, $val);
+    }
+    $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+    $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+    $stmt->execute();
     $products = $stmt->fetchAll();
 
     foreach ($products as &$p) {
@@ -690,6 +721,46 @@ if (empty($products) && empty($keyword) && empty($category)) {
                         </div>
                     <?php endforeach; ?>
                 </div>
+
+                <!-- Phân Trang (OFFSET / LIMIT Pagination) -->
+                <?php if ($total_pages > 1): ?>
+                    <div style="margin-top: 36px; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                        <div style="font-size: 0.88rem; color: var(--text-muted); font-weight: 500;">
+                            Hiển thị trang <strong><?php echo $page; ?></strong> / <strong><?php echo $total_pages; ?></strong> (Tổng <strong><?php echo number_format($total_products_count); ?></strong> sản phẩm)
+                        </div>
+                        <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; align-items: center;">
+                            <?php 
+                                $query_params = $_GET;
+                                unset($query_params['page']);
+                                $build_page_url = function($p) use ($query_params) {
+                                    $query_params['page'] = $p;
+                                    return 'index.php?' . http_build_query($query_params) . '#featured-products';
+                                };
+
+                                $start_p = max(1, $page - 2);
+                                $end_p = min($total_pages, $page + 2);
+                            ?>
+
+                            <?php if ($page > 1): ?>
+                                <a href="<?php echo $build_page_url(1); ?>" style="padding: 8px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; color: #0f172a; text-decoration: none; font-weight: 700; font-size: 0.85rem; transition: all 0.2s;" title="Trang đầu">« Đầu</a>
+                                <a href="<?php echo $build_page_url($page - 1); ?>" style="padding: 8px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; color: #0f172a; text-decoration: none; font-weight: 700; font-size: 0.85rem; transition: all 0.2s;">‹ Trước</a>
+                            <?php endif; ?>
+
+                            <?php for ($p = $start_p; $p <= $end_p; $p++): ?>
+                                <?php if ($p == $page): ?>
+                                    <span style="padding: 8px 16px; background: var(--primary); border: 1px solid var(--primary); border-radius: 12px; color: #ffffff; font-weight: 800; font-size: 0.88rem; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);"><?php echo $p; ?></span>
+                                <?php else: ?>
+                                    <a href="<?php echo $build_page_url($p); ?>" style="padding: 8px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; color: #0f172a; text-decoration: none; font-weight: 700; font-size: 0.85rem; transition: all 0.2s;"><?php echo $p; ?></a>
+                                <?php endif; ?>
+                            <?php endfor; ?>
+
+                            <?php if ($page < $total_pages): ?>
+                                <a href="<?php echo $build_page_url($page + 1); ?>" style="padding: 8px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; color: #0f172a; text-decoration: none; font-weight: 700; font-size: 0.85rem; transition: all 0.2s;">Sau ›</a>
+                                <a href="<?php echo $build_page_url($total_pages); ?>" style="padding: 8px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px; color: #0f172a; text-decoration: none; font-weight: 700; font-size: 0.85rem; transition: all 0.2s;" title="Trang cuối">Cuối »</a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
             <?php endif; ?>
         </main>
 
