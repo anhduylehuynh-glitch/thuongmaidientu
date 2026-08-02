@@ -408,24 +408,51 @@ table.admin-table td {
     }
 }
 
-/* Product Sub-tabs Styling */
-.sub-tab-btn:hover {
+/* Product Sub-tabs & Warehouse/Shipping/User Sub-tabs Styling */
+.sub-tab-btn:hover,
+.user-sub-tab-btn:hover,
+.warehouse-sub-tab-btn:hover,
+.shipping-sub-tab-btn:hover {
     background: #e2e8f0 !important;
     color: #0f172a !important;
 }
 
-.sub-tab-btn.active {
+.sub-tab-btn.active,
+.user-sub-tab-btn.active,
+.warehouse-sub-tab-btn.active,
+.shipping-sub-tab-btn.active {
     background: var(--primary) !important;
     color: white !important;
     box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
 }
 
-.product-sub-content {
+.product-sub-content,
+.user-sub-content,
+.warehouse-sub-content,
+.shipping-sub-content,
+.complaint-sub-content,
+.wallet-sub-content {
     display: none;
 }
 
-.product-sub-content.active {
+.product-sub-content.active,
+.user-sub-content.active,
+.warehouse-sub-content.active,
+.shipping-sub-content.active,
+.complaint-sub-content.active,
+.wallet-sub-content.active {
     display: block;
+}
+
+.sub-tab-btn.active,
+.user-sub-tab-btn.active,
+.warehouse-sub-tab-btn.active,
+.shipping-sub-tab-btn.active,
+.complaint-sub-tab-btn.active,
+.wallet-sub-tab-btn.active {
+    background: var(--primary) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
 }
 
 /* Custom Styled Select Dropdown & Search Inputs */
@@ -460,4 +487,21 @@ table.admin-table td {
     outline: none;
     border-color: var(--primary);
     box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.15);
+}
+
+/* Black & White Monochrome Icon Design System */
+.menu-icon,
+.btn-action svg,
+.stat-card-icon,
+.topbar-left svg,
+.sidebar-toggle,
+.topbar-right svg,
+.tab-content svg {
+    filter: grayscale(100%);
+    stroke: #0f172a;
+}
+
+.menu-item.active .menu-icon svg {
+    stroke: #ffffff !important;
+    filter: none;
 }

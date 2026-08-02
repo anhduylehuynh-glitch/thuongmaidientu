@@ -10,6 +10,18 @@ function hasPermission($user_id, $permission) {
     try {
         $db = getDBConnection();
 
+        // Vai trò ADMIN luôn có tất cả các quyền hệ thống
+        $stmt_admin = $db->prepare("
+            SELECT COUNT(*) 
+            FROM `NguoiDung_VaiTro` ndvt
+            JOIN `VaiTro` vt ON ndvt.MaVaiTro = vt.MaVaiTro
+            WHERE ndvt.MaNguoiDung = :uid AND vt.TenVaiTro = 'ADMIN'
+        ");
+        $stmt_admin->execute(['uid' => $user_id]);
+        if ((int)$stmt_admin->fetchColumn() > 0) {
+            return true;
+        }
+
         // Kiểm tra quyền chi tiết của vai trò người dùng trong database
         $stmt = $db->prepare("
             SELECT COUNT(*) 
