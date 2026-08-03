@@ -602,10 +602,10 @@ if (empty($products) && empty($keyword) && empty($category)) {
                     <!-- Ô Chọn Sắp xếp -->
                     <div class="filter-group">
                         <select name="sort" class="filter-select" onchange="this.form.submit()">
-                            <option value="newest" <?php echo $sort === 'newest' ? 'selected' : ''; ?>>🕒 Ngày đăng: Mới nhất</option>
-                            <option value="oldest" <?php echo $sort === 'oldest' ? 'selected' : ''; ?>>⏳ Ngày đăng: Cũ nhất</option>
-                            <option value="price_asc" <?php echo $sort === 'price_asc' ? 'selected' : ''; ?>>💲 Giá bán: Thấp đến Cao</option>
-                            <option value="price_desc" <?php echo $sort === 'price_desc' ? 'selected' : ''; ?>>💲 Giá bán: Cao đến Thấp</option>
+                            <option value="newest" <?php echo $sort === 'newest' ? 'selected' : ''; ?>>Ngày đăng: Mới nhất</option>
+                            <option value="oldest" <?php echo $sort === 'oldest' ? 'selected' : ''; ?>>Ngày đăng: Cũ nhất</option>
+                            <option value="price_asc" <?php echo $sort === 'price_asc' ? 'selected' : ''; ?>>Giá bán: Thấp đến Cao</option>
+                            <option value="price_desc" <?php echo $sort === 'price_desc' ? 'selected' : ''; ?>>Giá bán: Cao đến Thấp</option>
                         </select>
                     </div>
 

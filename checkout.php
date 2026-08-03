@@ -5,6 +5,8 @@ $is_logged_in = false;
 $user_data = null;
 $user_id = 0;
 
+$user_wallet_balance = 0;
+
 if (isset($_SESSION['user_id'])) {
     try {
         $db = getDBConnection();
@@ -14,6 +16,9 @@ if (isset($_SESSION['user_id'])) {
         $user_data = $stmt->fetch();
         if ($user_data) {
             $is_logged_in = true;
+            $w_stmt = $db->prepare("SELECT `SoDu` FROM `ViDienTu` WHERE `MaNguoiDung` = :id");
+            $w_stmt->execute(['id' => $user_id]);
+            $user_wallet_balance = (float)($w_stmt->fetchColumn() ?: 0);
         }
     } catch (Exception $e) {
         $is_logged_in = false;
@@ -166,66 +171,132 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']) 
                     }
                 }
 
-                // Create Address record in SoDiaChi
-                $ins_addr = $db->prepare("INSERT INTO SoDiaChi (MaNguoiDung, DiaChiChiTiet, ViDo, KinhDo) VALUES (:uid, :addr, 10.762622, 106.660172)");
-                $ins_addr->execute(['uid' => $buyer_id, 'addr' => $dia_chi]);
-                $addr_id = $db->lastInsertId();
+                // Xử lý kiểm tra & trừ tiền nếu chọn phương thức Ví Điện Tử
+                $wallet_id = null;
+                $payment_status_bit = "b'000'"; // Mặc định: Chưa thanh toán (b'000')
+                $is_paid_by_wallet = false;
 
-                // Create Order
-                $ins_order = $db->prepare("
-                    INSERT INTO DonHang (MaNguoiMua, MaDiaChiGiao, PhuongThucThanhToan, TongTienThanhToan, TrangThaiDonHang, TrangThaiThanhToan)
-                    VALUES (:buyer, :addr, :pt, :total, b'000', b'000')
-                ");
-                $ins_order->execute([
-                    'buyer' => $buyer_id,
-                    'addr' => $addr_id,
-                    'pt' => $phuong_thuc,
-                    'total' => $total_pay
-                ]);
-                $order_id = $db->lastInsertId();
-
-                // Create Order Details & Deduct Stock
-                $ins_detail = $db->prepare("
-                    INSERT INTO ChiTietDonHang (MaDonHang, MaSanPham, SoLuong, GiaChotMua, PhiShipGoc, PhiShipThucTe)
-                    VALUES (:oid, :pid, :qty, :gia, :ship_goc, :ship_tt)
-                ");
-
-                $upd_stock = $db->prepare("
-                    UPDATE SanPham 
-                    SET SoLuongTon = SoLuongTon - :qty,
-                        TrangThaiBan = CASE WHEN (SoLuongTon - :qty2) <= 0 THEN b'10' ELSE TrangThaiBan END
-                    WHERE MaSanPham = :pid
-                ");
-
-                foreach ($cart_items as $item) {
-                    $ins_detail->execute([
-                        'oid' => $order_id,
-                        'pid' => $item['MaSanPham'],
-                        'qty' => $item['SoLuong'],
-                        'gia' => $item['GiaBan'],
-                        'ship_goc' => 15000,
-                        'ship_tt' => 15000
-                    ]);
-
-                    $upd_stock->execute([
-                        'qty' => $item['SoLuong'],
-                        'qty2' => $item['SoLuong'],
-                        'pid' => $item['MaSanPham']
-                    ]);
-                }
-
-                // Clear Cart if order placed from cart
-                if ($direct_sp == 0) {
-                    if ($is_logged_in) {
-                        $del_cart = $db->prepare("DELETE FROM GioHang WHERE MaNguoiDung = :uid");
-                        $del_cart->execute(['uid' => $user_id]);
+                if ($phuong_thuc === 'Ví điện tử') {
+                    if (!$is_logged_in) {
+                        $db->rollBack();
+                        $error_msg = 'Vui lòng đăng nhập tài khoản để sử dụng phương thức thanh toán bằng Ví điện tử sàn.';
+                        $out_of_stock_found = true;
                     } else {
-                        unset($_SESSION['cart']);
+                        // Khóa bản ghi ví điện tử của người mua để kiểm tra số dư an toàn
+                        $w_chk = $db->prepare("SELECT MaVi, SoDu, TrangThaiVi FROM ViDienTu WHERE MaNguoiDung = :uid FOR UPDATE");
+                        $w_chk->execute(['uid' => $buyer_id]);
+                        $w_row = $w_chk->fetch();
+
+                        if (!$w_row) {
+                            // Tự động khởi tạo ví nếu tài khoản chưa có bản ghi ví
+                            $ins_w = $db->prepare("INSERT INTO ViDienTu (MaNguoiDung, SoDu, TrangThaiVi) VALUES (:uid, 0.00, b'1')");
+                            $ins_w->execute(['uid' => $buyer_id]);
+                            $wallet_id = $db->lastInsertId();
+                            $wallet_balance = 0.00;
+                            $wallet_status = 1;
+                        } else {
+                            $wallet_id = $w_row['MaVi'];
+                            $wallet_balance = (float)$w_row['SoDu'];
+                            $wallet_status = is_numeric($w_row['TrangThaiVi']) ? (int)$w_row['TrangThaiVi'] : (int)bindec(decbin(ord((string)$w_row['TrangThaiVi'])));
+                        }
+
+                        if ($wallet_status === 0) {
+                            $db->rollBack();
+                            $error_msg = 'Ví điện tử của bạn hiện đang bị khóa. Vui lòng chọn phương thức thanh toán khác hoặc liên hệ bộ phận hỗ trợ.';
+                            $out_of_stock_found = true;
+                        } elseif ($wallet_balance < $total_pay) {
+                            $db->rollBack();
+                            $lack_str = number_format($total_pay - $wallet_balance, 0, ',', '.');
+                            $curr_str = number_format($wallet_balance, 0, ',', '.');
+                            $total_str = number_format($total_pay, 0, ',', '.');
+                            $error_msg = "Số dư Ví điện tử không đủ để thanh toán. Tổng đơn hàng: {$total_str} đ (Số dư ví: {$curr_str} đ, còn thiếu: {$lack_str} đ). Vui lòng nạp thêm tiền hoặc chọn phương thức khác.";
+                            $out_of_stock_found = true;
+                        } else {
+                            // Trừ tiền trực tiếp trong ví điện tử người mua
+                            $upd_w = $db->prepare("UPDATE ViDienTu SET SoDu = SoDu - :amt WHERE MaVi = :mavi");
+                            $upd_w->execute(['amt' => $total_pay, 'mavi' => $wallet_id]);
+                            $payment_status_bit = "b'001'"; // Đã thanh toán (b'001')
+                            $is_paid_by_wallet = true;
+                        }
                     }
                 }
 
-                $db->commit();
-                $order_created = true;
+                if (!$out_of_stock_found) {
+                    // Create Address record in SoDiaChi
+                    $ins_addr = $db->prepare("INSERT INTO SoDiaChi (MaNguoiDung, DiaChiChiTiet, ViDo, KinhDo) VALUES (:uid, :addr, 10.762622, 106.660172)");
+                    $ins_addr->execute(['uid' => $buyer_id, 'addr' => $dia_chi]);
+                    $addr_id = $db->lastInsertId();
+
+                    // Create Order
+                    $ins_order = $db->prepare("
+                        INSERT INTO DonHang (MaNguoiMua, MaDiaChiGiao, PhuongThucThanhToan, TongTienThanhToan, TrangThaiDonHang, TrangThaiThanhToan)
+                        VALUES (:buyer, :addr, :pt, :total, b'000', {$payment_status_bit})
+                    ");
+                    $ins_order->execute([
+                        'buyer' => $buyer_id,
+                        'addr' => $addr_id,
+                        'pt' => $phuong_thuc,
+                        'total' => $total_pay
+                    ]);
+                    $order_id = $db->lastInsertId();
+
+                    // Ghi nhận lịch sử giao dịch ví nếu thanh toán thành công qua ví điện tử
+                    if ($is_paid_by_wallet && $wallet_id) {
+                        $ins_tx = $db->prepare("
+                            INSERT INTO LichSuGiaoDichVi (MaViNguon, MaViDich, SoTien, LoaiGiaoDich, TrangThai, MoTa, MaDonHang, NgayTao)
+                            VALUES (:mavi, NULL, :sotien, 'THANH_TOAN', b'01', :mota, :oid, NOW())
+                        ");
+                        $ins_tx->execute([
+                            'mavi' => $wallet_id,
+                            'sotien' => $total_pay,
+                            'mota' => "Thanh toán đơn hàng #DH-" . sprintf('%05d', $order_id) . " bằng Ví điện tử sàn",
+                            'oid' => $order_id
+                        ]);
+                    }
+
+                    // Create Order Details & Deduct Stock
+                    $ins_detail = $db->prepare("
+                        INSERT INTO ChiTietDonHang (MaDonHang, MaSanPham, SoLuong, GiaChotMua, PhiShipGoc, PhiShipThucTe)
+                        VALUES (:oid, :pid, :qty, :gia, :ship_goc, :ship_tt)
+                    ");
+
+                    $upd_stock = $db->prepare("
+                        UPDATE SanPham 
+                        SET SoLuongTon = SoLuongTon - :qty,
+                            TrangThaiBan = CASE WHEN (SoLuongTon - :qty2) <= 0 THEN b'10' ELSE TrangThaiBan END
+                        WHERE MaSanPham = :pid
+                    ");
+
+                    foreach ($cart_items as $item) {
+                        $ins_detail->execute([
+                            'oid' => $order_id,
+                            'pid' => $item['MaSanPham'],
+                            'qty' => $item['SoLuong'],
+                            'gia' => $item['GiaBan'],
+                            'ship_goc' => 15000,
+                            'ship_tt' => 15000
+                        ]);
+
+                        $upd_stock->execute([
+                            'qty' => $item['SoLuong'],
+                            'qty2' => $item['SoLuong'],
+                            'pid' => $item['MaSanPham']
+                        ]);
+                    }
+
+                    // Clear Cart if order placed from cart
+                    if ($direct_sp == 0) {
+                        if ($is_logged_in) {
+                            $del_cart = $db->prepare("DELETE FROM GioHang WHERE MaNguoiDung = :uid");
+                            $del_cart->execute(['uid' => $user_id]);
+                        } else {
+                            unset($_SESSION['cart']);
+                        }
+                    }
+
+                    $db->commit();
+                    $order_created = true;
+                }
             }
         } catch (Exception $e) {
             if (isset($db) && $db->inTransaction()) {
@@ -419,7 +490,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']) 
                                         <input type="radio" name="phuong_thuc" value="Ví điện tử">
                                         <div>
                                             <div style="font-weight: 700; color: var(--text-main);">Ví Điện Tử Sàn</div>
-                                            <div style="font-size: 0.8rem; color: var(--text-muted);">Thanh toán trực tiếp từ số dư ví hệ thống</div>
+                                            <div style="font-size: 0.8rem; color: var(--text-muted);">
+                                                Thanh toán trực tiếp từ số dư ví hệ thống
+                                                <?php if ($is_logged_in): ?>
+                                                    (Số dư hiện tại: <strong style="color: var(--primary);"><?php echo number_format($user_wallet_balance, 0, ',', '.'); ?> đ</strong>)
+                                                <?php else: ?>
+                                                    <span style="color: #ef4444;">(Yêu cầu đăng nhập)</span>
+                                                <?php endif; ?>
+                                            </div>
                                         </div>
                                     </label>
 

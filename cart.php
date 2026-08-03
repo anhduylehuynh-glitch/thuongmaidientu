@@ -192,6 +192,31 @@ $cart_count = getCartItemCount();
             margin: 40px auto;
             padding: 0 20px;
         }
+        .page-top-tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 12px;
+        }
+        .page-tab-item {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 10px 22px;
+            border-radius: 12px;
+            transition: all 0.25s ease;
+        }
+        .page-tab-item:hover {
+            color: var(--primary);
+            background: rgba(2, 132, 199, 0.06);
+        }
+        .page-tab-item.active {
+            color: var(--primary);
+            background: #e0f2fe;
+            box-shadow: 0 4px 12px rgba(2, 132, 199, 0.15);
+        }
         .cart-grid {
             display: grid;
             grid-template-columns: 1fr 340px;
@@ -296,6 +321,15 @@ $cart_count = getCartItemCount();
         </header>
 
         <div class="cart-container">
+            <div class="page-top-tabs">
+                <a href="cart.php" class="page-tab-item active">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> Giỏ Hàng Của Tôi <?php echo count($cart_items) > 0 ? '(' . count($cart_items) . ')' : ''; ?>
+                </a>
+                <a href="orders.php" class="page-tab-item">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: text-bottom; margin-right: 4px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg> Đơn Hàng Của Tôi
+                </a>
+            </div>
+
             <h1 style="font-size: 1.8rem; font-weight: 800; margin-bottom: 24px;">Giỏ Hàng Của Bạn (<?php echo count($cart_items); ?> sản phẩm)</h1>
 
             <?php if (!empty($flash_success)): ?>

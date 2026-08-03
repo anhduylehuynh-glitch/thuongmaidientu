@@ -1298,7 +1298,19 @@ try {
                             </td>
                             <td>
                                 <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                                    <button type="button" class="btn-action" style="background: #f1f5f9; color: #475569;" onclick="openAdminProductModal(<?php echo $p['MaSanPham']; ?>, '<?php echo addslashes(htmlspecialchars($p['TenSanPham'])); ?>', '<?php echo number_format($p['GiaBan'], 0, ',', '.'); ?> đ', '<?php echo addslashes(htmlspecialchars($p['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($p['TinhTrang'])); ?>', '<?php echo addslashes(htmlspecialchars($p['TenNguoiBan'])); ?>', '<?php echo $p['DiemUyTin']; ?>', '<?php echo addslashes(htmlspecialchars($p['MoTaChiTiet'] ?? 'Chưa có mô tả')); ?>', '<?php echo $img_json; ?>', '<?php echo $vid_path; ?>', <?php echo $st_val; ?>)">Xem</button>
+                                    <button type="button" class="btn-action" style="background: #f1f5f9; color: #475569;"
+                                        data-pid="<?php echo $p['MaSanPham']; ?>"
+                                        data-title="<?php echo htmlspecialchars($p['TenSanPham'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-price="<?php echo number_format($p['GiaBan'], 0, ',', '.'); ?> đ"
+                                        data-cat="<?php echo htmlspecialchars($p['TenDanhMuc'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-cond="<?php echo htmlspecialchars($p['TinhTrang'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-seller="<?php echo htmlspecialchars($p['TenNguoiBan'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-rep="<?php echo (int)($p['DiemUyTin'] ?? 0); ?>"
+                                        data-desc="<?php echo htmlspecialchars($p['MoTaChiTiet'] ?? 'Chưa có mô tả', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-images="<?php echo htmlspecialchars(json_encode($p['Images'] ?? []), ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-video="<?php echo htmlspecialchars($p['VideoThucTe'] ?? '', ENT_QUOTES, 'UTF-8'); ?>"
+                                        data-status="<?php echo $st_val; ?>"
+                                        onclick="openAdminProductModalFromBtn(this)">Xem</button>
 
                                     <form method="POST" style="display: <?php echo ($st_val === 1) ? 'none !important' : 'inline'; ?>;" class="approve-form" onsubmit="handleProductActionAjax(event, this, <?php echo $p['MaSanPham']; ?>, 'approve')">
                                         <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
@@ -3876,8 +3888,9 @@ try {
                             <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 6px;">Mô tả sản phẩm:</h4>
                             <div id="admin_modal_desc" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; white-space: pre-line; max-height: 140px; overflow-y: auto; margin-bottom: 16px;"></div>
 
-                            <!-- Nút Thao Tác Duyệt / Cấm -->
-                            <div style="display: flex; gap: 10px;">
+                            <!-- Nút Thao Tác Duyệt / Cấm / Xem Trang Web -->
+                            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                                <a id="admin_modal_web_link" href="#" target="_blank" class="btn" style="background: #e0e7ff; color: #4338ca; border-radius: 12px; padding: 10px 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">🔗 Trang Sản Phẩm</a>
                                 <form method="POST" action="admin.php" style="flex: 1;" onsubmit="handleModalProductActionAjax(event, this, 'approve')">
                                     <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
                                     <input type="hidden" name="action" value="approve_product">
@@ -5011,9 +5024,27 @@ try {
             document.getElementById('editCatModal').style.display = 'none';
         }
 
+        function openAdminProductModalFromBtn(btn) {
+            const pid = btn.getAttribute('data-pid');
+            const title = btn.getAttribute('data-title');
+            const price = btn.getAttribute('data-price');
+            const cat = btn.getAttribute('data-cat');
+            const cond = btn.getAttribute('data-cond');
+            const seller = btn.getAttribute('data-seller');
+            const rep = btn.getAttribute('data-rep');
+            const desc = btn.getAttribute('data-desc');
+            const imagesJson = btn.getAttribute('data-images') || '[]';
+            const videoPath = btn.getAttribute('data-video');
+            const stVal = parseInt(btn.getAttribute('data-status') || '0', 10);
+
+            openAdminProductModal(pid, title, price, cat, cond, seller, rep, desc, imagesJson, videoPath, stVal);
+        }
+
         function openAdminProductModal(pid, title, price, cat, cond, seller, rep, desc, imagesJson, videoPath, stVal) {
             document.getElementById('admin_modal_pid_approve').value = pid;
             document.getElementById('admin_modal_pid_ban').value = pid;
+            const webLink = document.getElementById('admin_modal_web_link');
+            if (webLink) webLink.href = 'product_detail.php?id=' + pid;
             document.getElementById('admin_modal_title').textContent = title;
             document.getElementById('admin_modal_price').textContent = price;
             document.getElementById('admin_modal_cat').textContent = cat;

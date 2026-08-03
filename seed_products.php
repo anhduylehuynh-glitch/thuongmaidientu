@@ -82,8 +82,8 @@ try {
     $db->beginTransaction();
 
     $stmt_sp = $db->prepare("INSERT INTO `SanPham` 
-        (`MaNguoiBan`, `MaDanhMuc`, `TenSanPham`, `MoTaChiTiet`, `TinhTrang`, `KhoiLuong_Kg`, `GiaBan`, `TrangThaiDuyet`, `TrangThaiBan`) 
-        VALUES (:seller, :cat, :name, :desc, :cond, :weight, :price, :status, b'00')");
+        (`MaNguoiBan`, `MaDanhMuc`, `TenSanPham`, `MoTaChiTiet`, `TinhTrang`, `KhoiLuong_Kg`, `GiaBan`, `SoLuongTon`, `TrangThaiDuyet`, `TrangThaiBan`) 
+        VALUES (:seller, :cat, :name, :desc, :cond, :weight, :price, 1, :status, b'00')");
 
     $stmt_img = $db->prepare("INSERT INTO `HinhAnhSP` (`MaSanPham`, `DuongDanAnh`, `AnhChinh`) VALUES (:pid, :url, :main)");
 

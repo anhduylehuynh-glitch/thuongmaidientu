@@ -197,6 +197,7 @@ CREATE TABLE DonHang (
     TongTienThanhToan DECIMAL(15, 2) NOT NULL, -- Tổng tiền (Giá sản phẩm + Phí ship thực tế)
     TrangThaiDonHang BIT(3) DEFAULT b'000', -- b'000': Chờ xác nhận, b'001': Đang xử lý, b'010': Đang giao, b'011': Đã giao, b'100': Khiếu nại, b'101': Hoàn tất, b'110': Đã hủy
     TrangThaiThanhToan BIT(3) DEFAULT b'000', -- b'000': Chưa thanh toán, b'001': Đã thanh toán, b'010': Tạm giữ (Escrow), b'011': Đã giải ngân, b'100': Đã hoàn tiền
+    LyDoHuy VARCHAR(255) NULL, -- Lý do hủy đơn hàng của người mua
     NgayTao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (MaNguoiMua) REFERENCES NguoiDung(MaNguoiDung),
     FOREIGN KEY (MaDiaChiGiao) REFERENCES SoDiaChi(MaDiaChi)
