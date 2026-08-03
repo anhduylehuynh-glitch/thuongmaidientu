@@ -30,11 +30,12 @@ $flash_success = $_SESSION['flash_success'] ?? '';
 $flash_error = $_SESSION['flash_error'] ?? '';
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-// Handle POST actions (Cancel order with reason)
+// Handle POST actions
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action'])) {
     $action = $_POST['action'];
     $oid = (int)($_POST['order_id'] ?? 0);
 
+    // 1. Hủy đơn hàng (Chỉ dành cho đơn Chờ Xác Nhận st=0)
     if ($action === 'cancel_order' && $oid > 0) {
         $ly_do_option = trim($_POST['ly_do_option'] ?? '');
         $ly_do_other = trim($_POST['ly_do_other'] ?? '');
@@ -109,6 +110,83 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']))
         header("Location: cart.php");
         exit;
     }
+
+    // 2. Xác nhận đã nhận hàng (st=5 Hoàn tất)
+    if ($action === 'confirm_received' && $oid > 0) {
+        try {
+            $db = getDBConnection();
+            $stmt = $db->prepare("SELECT * FROM DonHang WHERE MaDonHang = :oid AND MaNguoiMua = :uid");
+            $stmt->execute(['oid' => $oid, 'uid' => $user_id]);
+            $ord_item = $stmt->fetch();
+
+            if ($ord_item) {
+                // Cập nhật trạng thái đơn thành Hoàn Tất / Đã Nhận (b'101' / 5)
+                $upd = $db->prepare("UPDATE DonHang SET TrangThaiDonHang = b'101' WHERE MaDonHang = :oid");
+                $upd->execute(['oid' => $oid]);
+
+                $_SESSION['flash_success'] = "Cảm ơn bạn! Đã xác nhận nhận đơn hàng #DH-" . sprintf('%05d', $oid) . " thành công!";
+            }
+        } catch (Exception $e) {
+            $_SESSION['flash_error'] = "Lỗi khi xác nhận nhận hàng: " . $e->getMessage();
+        }
+        header("Location: orders.php?status=received");
+        exit;
+    }
+
+    // 3. Yêu cầu trả hàng / hoàn tiền (st=4 Trả hàng)
+    if ($action === 'request_return' && $oid > 0) {
+        $ly_do_tra = trim($_POST['ly_do_tra_hang'] ?? '');
+        $bang_chung = trim($_POST['hinh_anh_bang_chung'] ?? '');
+
+        if (empty($ly_do_tra)) {
+            $_SESSION['flash_error'] = "Vui lòng điền lý do yêu cầu trả hàng / hoàn tiền!";
+        } else {
+            try {
+                $db = getDBConnection();
+                $db->beginTransaction();
+
+                $stmt = $db->prepare("
+                    SELECT dh.*, ct.MaSanPham, sp.MaNguoiBan 
+                    FROM DonHang dh 
+                    JOIN ChiTietDonHang ct ON dh.MaDonHang = ct.MaDonHang 
+                    JOIN SanPham sp ON ct.MaSanPham = sp.MaSanPham 
+                    WHERE dh.MaDonHang = :oid AND dh.MaNguoiMua = :uid 
+                    LIMIT 1
+                ");
+                $stmt->execute(['oid' => $oid, 'uid' => $user_id]);
+                $ord_item = $stmt->fetch();
+
+                if ($ord_item) {
+                    // Thêm vào bảng TraHangHoanTien
+                    $ins_ret = $db->prepare("
+                        INSERT INTO TraHangHoanTien (MaDonHang, MaSanPham, MaNguoiMua, MaNguoiBan, LyDoTraHang, HinhAnhBangChung, SoTienHoan, TrangThai, NgayTao)
+                        VALUES (:oid, :pid, :uid, :seller_id, :reason, :proof, :amt, 'CHO_XU_LY', NOW())
+                    ");
+                    $ins_ret->execute([
+                        'oid' => $oid,
+                        'pid' => $ord_item['MaSanPham'],
+                        'uid' => $user_id,
+                        'seller_id' => $ord_item['MaNguoiBan'],
+                        'reason' => $ly_do_tra,
+                        'proof' => $bang_chung,
+                        'amt' => $ord_item['TongTienThanhToan']
+                    ]);
+
+                    // Cập nhật trạng thái đơn thành Trả Hàng (b'100' / 4)
+                    $upd = $db->prepare("UPDATE DonHang SET TrangThaiDonHang = b'100' WHERE MaDonHang = :oid");
+                    $upd->execute(['oid' => $oid]);
+
+                    $_SESSION['flash_success'] = "Đã gửi yêu cầu trả hàng / hoàn tiền cho đơn #DH-" . sprintf('%05d', $oid) . "! Người bán sẽ xem xét trong 24h-48h.";
+                }
+                $db->commit();
+            } catch (Exception $e) {
+                if (isset($db) && $db->inTransaction()) $db->rollBack();
+                $_SESSION['flash_error'] = "Lỗi khi gửi yêu cầu trả hàng: " . $e->getMessage();
+            }
+        }
+        header("Location: orders.php?status=returns");
+        exit;
+    }
 }
 
 // Helper to format order status
@@ -117,10 +195,10 @@ function formatOrderStatus($status_val) {
     switch ($val) {
         case 0: return ['text' => 'Chờ xác nhận', 'color' => '#d97706', 'bg' => '#fef3c7'];
         case 1: return ['text' => 'Đang xử lý', 'color' => '#2563eb', 'bg' => '#dbeafe'];
-        case 2: return ['text' => 'Đang giao', 'color' => '#0284c7', 'bg' => '#e0f2fe'];
-        case 3: return ['text' => 'Đã giao', 'color' => '#16a34a', 'bg' => '#dcfce7'];
-        case 4: return ['text' => 'Khiếu nại / Trả hàng', 'color' => '#dc2626', 'bg' => '#fee2e2'];
-        case 5: return ['text' => 'Hoàn tất', 'color' => '#16a34a', 'bg' => '#dcfce7'];
+        case 2: return ['text' => 'Đang chuẩn bị', 'color' => '#0284c7', 'bg' => '#e0f2fe'];
+        case 3: return ['text' => 'Đang giao', 'color' => '#0284c7', 'bg' => '#e0f2fe'];
+        case 4: return ['text' => 'Trả hàng / Hoàn tiền', 'color' => '#dc2626', 'bg' => '#fee2e2'];
+        case 5: return ['text' => 'Hoàn tất / Đã nhận', 'color' => '#16a34a', 'bg' => '#dcfce7'];
         case 6: return ['text' => 'Đã hủy', 'color' => '#6b7280', 'bg' => '#f3f4f6'];
         default: return ['text' => 'Chờ xác nhận', 'color' => '#d97706', 'bg' => '#fef3c7'];
     }
@@ -177,6 +255,7 @@ $counts = [
     'pending' => 0,
     'delivering' => 0,
     'delivered' => 0,
+    'received' => 0,
     'returns' => 0,
     'cancelled' => 0
 ];
@@ -185,7 +264,8 @@ foreach ($all_orders as $o) {
     $st = is_numeric($o['TrangThaiDonHang']) ? (int)$o['TrangThaiDonHang'] : (int)bindec(decbin(ord((string)$o['TrangThaiDonHang'])));
     if ($st === 0) $counts['pending']++;
     elseif ($st === 1 || $st === 2) $counts['delivering']++;
-    elseif ($st === 3 || $st === 5) $counts['delivered']++;
+    elseif ($st === 3) $counts['delivered']++;
+    elseif ($st === 5) $counts['received']++;
     elseif ($st === 4) $counts['returns']++;
     elseif ($st === 6) $counts['cancelled']++;
 }
@@ -196,7 +276,8 @@ $orders = array_filter($all_orders, function($o) use ($status_filter) {
     $st = is_numeric($o['TrangThaiDonHang']) ? (int)$o['TrangThaiDonHang'] : (int)bindec(decbin(ord((string)$o['TrangThaiDonHang'])));
     if ($status_filter === 'pending') return $st === 0;
     if ($status_filter === 'delivering') return ($st === 1 || $st === 2);
-    if ($status_filter === 'delivered') return ($st === 3 || $st === 5);
+    if ($status_filter === 'delivered') return $st === 3;
+    if ($status_filter === 'received') return $st === 5;
     if ($status_filter === 'returns') return $st === 4;
     if ($status_filter === 'cancelled') return $st === 6;
     return true;
@@ -357,6 +438,36 @@ $cart_count = getCartItemCount();
             background: #fca5a5;
             color: #991b1b;
         }
+        .btn-confirm-received {
+            background: #dcfce7;
+            color: #166534;
+            border: none;
+            padding: 9px 20px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-confirm-received:hover {
+            background: #bbf7d0;
+            color: #14532d;
+        }
+        .btn-request-return {
+            background: #fee2e2;
+            color: #dc2626;
+            border: none;
+            padding: 9px 20px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-request-return:hover {
+            background: #fca5a5;
+            color: #991b1b;
+        }
     </style>
 </head>
 <body>
@@ -405,6 +516,9 @@ $cart_count = getCartItemCount();
                 </a>
                 <a href="orders.php?status=delivered" class="status-tab <?php echo $status_filter === 'delivered' ? 'active' : ''; ?>">
                     Đã giao <span class="tab-count"><?php echo $counts['delivered']; ?></span>
+                </a>
+                <a href="orders.php?status=received" class="status-tab <?php echo $status_filter === 'received' ? 'active' : ''; ?>">
+                    Đã nhận <span class="tab-count"><?php echo $counts['received']; ?></span>
                 </a>
                 <a href="orders.php?status=returns" class="status-tab <?php echo $status_filter === 'returns' ? 'active' : ''; ?>">
                     Trả hàng <span class="tab-count"><?php echo $counts['returns']; ?></span>
@@ -483,6 +597,11 @@ $cart_count = getCartItemCount();
                             <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
                                 <div>Địa chỉ giao: <strong><?php echo htmlspecialchars($ord['DiaChiChiTiet'] ?? 'Chưa cập nhật'); ?></strong></div>
                                 <div>Thanh toán: <strong><?php echo htmlspecialchars($ord['PhuongThucThanhToan']); ?></strong> (<?php echo $payment_text; ?>)</div>
+                                <?php if (!empty($ord['MaVanDon'])): ?>
+                                    <div style="font-size: 0.85rem; color: #0284c7; margin-top: 2px;">
+                                        Mã vận đơn: <strong><?php echo htmlspecialchars($ord['MaVanDon']); ?></strong>
+                                    </div>
+                                <?php endif; ?>
                                 <?php if (!empty($ord['LyDoHuy'])): ?>
                                     <div style="font-size: 0.85rem; color: #dc2626; margin-top: 4px; background: #fee2e2; padding: 4px 10px; border-radius: 8px; display: inline-block;">
                                         Lý do hủy: <strong><?php echo htmlspecialchars($ord['LyDoHuy']); ?></strong>
@@ -498,6 +617,16 @@ $cart_count = getCartItemCount();
                                 <?php if ($st_val === 0): ?>
                                     <button type="button" class="btn-cancel-order" onclick="openCancelModal(<?php echo $ord['MaDonHang']; ?>, 'DH-<?php echo sprintf('%05d', $ord['MaDonHang']); ?>')">
                                         Hủy Đơn Hàng
+                                    </button>
+                                <?php elseif ($st_val === 1 || $st_val === 2 || $st_val === 3): ?>
+                                    <form method="POST" action="orders.php?status=received" style="display: inline;" onsubmit="return confirm('Bạn có chắc chắn đã nhận được hàng và hài lòng với sản phẩm không?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                                        <input type="hidden" name="action" value="confirm_received">
+                                        <input type="hidden" name="order_id" value="<?php echo $ord['MaDonHang']; ?>">
+                                        <button type="submit" class="btn-confirm-received">✓ Xác Nhận Đã Nhận</button>
+                                    </form>
+                                    <button type="button" class="btn-request-return" onclick="openReturnModal(<?php echo $ord['MaDonHang']; ?>, 'DH-<?php echo sprintf('%05d', $ord['MaDonHang']); ?>')">
+                                        🔄 Hoàn Đơn / Trả Hàng
                                     </button>
                                 <?php endif; ?>
                             </div>
@@ -544,6 +673,37 @@ $cart_count = getCartItemCount();
             </div>
         </div>
 
+        <!-- Modal Form Yêu Cầu Trả Hàng / Hoàn Tiền -->
+        <div id="returnOrderModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; padding: 20px;">
+            <div style="background: #ffffff; width: 100%; max-width: 480px; border-radius: 24px; padding: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); position: relative;">
+                <button type="button" onclick="closeReturnModal()" style="position: absolute; top: 20px; right: 20px; background: #f1f5f9; border: none; font-size: 1.1rem; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">✕</button>
+
+                <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">Yêu Cầu Hoàn Đơn / Trả Hàng</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;" id="return_order_code_display"></p>
+
+                <form method="POST" action="orders.php?status=returns">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                    <input type="hidden" name="action" value="request_return">
+                    <input type="hidden" name="order_id" id="modal_return_order_id">
+
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 8px;">Lý do trả hàng / hoàn tiền *</label>
+                        <textarea name="ly_do_tra_hang" class="form-control" style="width: 100%; padding: 10px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 0.9rem; resize: vertical; min-height: 90px;" placeholder="Mô tả cụ thể lý do (sản phẩm lỗi, vỡ, không đúng như hình ảnh...)" required></textarea>
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-size: 0.85rem; font-weight: 700; margin-bottom: 6px;">Link/Đường dẫn hình ảnh bằng chứng (nếu có)</label>
+                        <input type="text" name="hinh_anh_bang_chung" class="form-control" style="width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid #cbd5e1; font-size: 0.9rem;" placeholder="https://...">
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button type="button" onclick="closeReturnModal()" style="flex: 1; padding: 12px; border-radius: 50px; border: 1px solid #cbd5e1; background: #ffffff; color: var(--text-main); font-weight: 700; cursor: pointer;">Trở Lại</button>
+                        <button type="submit" style="flex: 1; padding: 12px; border-radius: 50px; border: none; background: #dc2626; color: #ffffff; font-weight: 700; cursor: pointer;">Gửi Yêu Cầu</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <script>
             function openCancelModal(orderId, orderCode) {
                 document.getElementById('modal_cancel_order_id').value = orderId;
@@ -555,6 +715,15 @@ $cart_count = getCartItemCount();
             }
             function toggleCancelOtherReason(val) {
                 document.getElementById('cancel_other_box').style.display = (val === 'Khác') ? 'block' : 'none';
+            }
+
+            function openReturnModal(orderId, orderCode) {
+                document.getElementById('modal_return_order_id').value = orderId;
+                document.getElementById('return_order_code_display').textContent = 'Yêu cầu trả hàng cho ' + orderCode;
+                document.getElementById('returnOrderModal').style.display = 'flex';
+            }
+            function closeReturnModal() {
+                document.getElementById('returnOrderModal').style.display = 'none';
             }
         </script>
 

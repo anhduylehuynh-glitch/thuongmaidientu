@@ -407,6 +407,8 @@ function decodeTransactionStatus($status_val) {
                 <nav class="nav-menu">
                     <a href="index.php" class="nav-link">Trang Chủ</a>
                     <a href="#" class="nav-link">Sản Phẩm</a>
+                    <a href="orders.php" class="nav-link">Đơn Hàng</a>
+                    <a href="seller_dashboard.php" class="nav-link" style="color: #0284c7; font-weight: 700;">Kênh Người Bán</a>
                     <a href="post_product.php" class="nav-link" style="color: var(--primary); font-weight: 700;">Đăng Bán</a>
                     
                     <?php if ($is_logged_in && in_array('ADMIN', $user_roles)): ?>
@@ -430,6 +432,8 @@ function decodeTransactionStatus($status_val) {
                                 Đăng nhập từ: <b><?php echo !empty($user_data['google_id']) ? 'Google' : 'Hệ thống'; ?></b>
                             </div>
                             <a href="profile.php" class="dropdown-item">Hồ sơ cá nhân</a>
+                            <a href="orders.php" class="dropdown-item">Đơn hàng của tôi</a>
+                            <a href="seller_dashboard.php" class="dropdown-item" style="color: #0284c7; font-weight: 600;">Kênh Người Bán (Shop)</a>
                             <a href="post_product.php" class="dropdown-item" style="color: var(--primary);">Đăng bán sản phẩm</a>
                             <?php if (in_array('ADMIN', $user_roles)): ?>
                                 <a href="admin.php" class="dropdown-item" style="color: #6366f1; font-weight: 600;">Trang Quản Lý Admin</a>

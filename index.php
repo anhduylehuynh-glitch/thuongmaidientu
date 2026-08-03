@@ -512,6 +512,9 @@ if (empty($products) && empty($keyword) && empty($category)) {
                                 <a href="orders.php" class="dropdown-item">
                                     Đơn hàng của tôi
                                 </a>
+                                <a href="seller_dashboard.php" class="dropdown-item" style="color: #0284c7; font-weight: 600;">
+                                    Kênh Người Bán (Shop)
+                                </a>
                                 <a href="post_product.php" class="dropdown-item" style="color: var(--primary);">
                                     Đăng bán sản phẩm
                                 </a>

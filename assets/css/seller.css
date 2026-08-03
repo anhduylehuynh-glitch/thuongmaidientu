@@ -1,0 +1,315 @@
+/* ============================================================================
+   KÊNH NGƯỜI BÁN & ĐANG BÁN - SELLER PORTAL & STOREFRONT STYLES
+   ============================================================================ */
+
+:root {
+    --seller-bg: #f8fafc;
+    --seller-card: #ffffff;
+    --seller-border: #e2e8f0;
+    --seller-primary: #0284c7;
+    --seller-sidebar-bg: #0f172a;
+    --seller-sidebar-text: #f8fafc;
+    --seller-menu-hover: rgba(56, 189, 248, 0.12);
+    --seller-accent: #38bdf8;
+}
+
+body.seller-body {
+    background-color: var(--seller-bg);
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+/* 1. SELLER DASHBOARD LAYOUT & SIDEBAR */
+.seller-layout {
+    display: flex;
+    min-height: 100vh;
+}
+
+.seller-sidebar {
+    width: 260px;
+    background: var(--seller-sidebar-bg);
+    color: var(--seller-sidebar-text);
+    flex-shrink: 0;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.05);
+}
+
+.seller-brand {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--seller-accent);
+    margin-bottom: 24px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.seller-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.seller-menu-item {
+    margin-bottom: 4px;
+}
+
+.seller-menu-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    color: #94a3b8;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.25s ease;
+}
+
+.seller-menu-link:hover,
+.seller-menu-link.active {
+    background: var(--seller-menu-hover);
+    color: var(--seller-accent);
+}
+
+.seller-content {
+    flex: 1;
+    padding: 32px;
+    overflow-y: auto;
+}
+
+.seller-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+}
+
+/* 2. STAT CARDS & WIDGETS */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.stat-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 24px;
+    border: 1px solid var(--seller-border);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06);
+}
+
+.stat-title {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.stat-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.seller-card-box {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 28px;
+    border: 1px solid var(--seller-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    margin-bottom: 28px;
+}
+
+/* 3. SELLER DATA TABLES */
+.seller-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 16px;
+}
+
+.seller-table th {
+    background: #f1f5f9;
+    padding: 14px;
+    text-align: left;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+.seller-table td {
+    padding: 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.88rem;
+    color: #1e293b;
+}
+
+/* 4. BUTTONS & ACTIONS */
+.btn-seller {
+    padding: 8px 16px;
+    border-radius: 50px;
+    border: none;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.btn-seller-primary {
+    background: var(--seller-primary);
+    color: #ffffff;
+}
+
+.btn-seller-primary:hover {
+    background: #0369a1;
+}
+
+.btn-seller-danger {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.btn-seller-danger:hover {
+    background: #dc2626;
+}
+
+.btn-seller-success {
+    background: #22c55e;
+    color: #ffffff;
+}
+
+.btn-seller-success:hover {
+    background: #16a34a;
+}
+
+/* 5. MODALS */
+.modal-seller {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal-seller-card {
+    background: #ffffff;
+    width: 100%;
+    max-width: 600px;
+    border-radius: 24px;
+    padding: 30px;
+    position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+/* 6. SUB-TABS PHÂN LOẠI TRẠNG THÁI */
+.status-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.status-tab:hover {
+    color: #0f172a;
+    background: #f1f5f9;
+}
+
+.status-tab.active {
+    background: #0284c7;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.status-tab .tab-count {
+    background: rgba(0, 0, 0, 0.08);
+    color: inherit;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 50px;
+}
+
+.status-tab.active .tab-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
+}
+
+/* 7. STOREFRONT PUBLIC PAGE (SELLER.PHP) STYLES */
+.seller-store-card {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 28px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+}
+
+.seller-store-left {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    flex: 1;
+    min-width: 280px;
+}
+
+.seller-store-avatar {
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #e0f2fe;
+}
+
+.seller-store-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0 0 6px 0;
+}
+
+.seller-badge-preferred {
+    background: #fef3c7;
+    color: #d97706;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 50px;
+}
