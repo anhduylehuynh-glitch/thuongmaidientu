@@ -237,7 +237,7 @@ function getRolePermissionsData($db, $role_id) {
 }
 
 // Xử lý các thao tác Admin (POST / GET)
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action'])) {
     try {
         // Kiểm tra CSRF Token cho mọi form POST
         $post_token = $_POST['csrf_token'] ?? '';
@@ -1635,14 +1635,7 @@ try {
         $total_wallets = count($wallet_list);
         $total_bank_accounts = count($bank_account_list);
 
-        // Lấy tháng và năm lọc từ GET parameter (Mặc định: Tháng & Năm hiện tại)
-        $selected_month = isset($_GET['filter_month']) ? (int)$_GET['filter_month'] : (int)date('m');
-        $selected_year  = isset($_GET['filter_year'])  ? (int)$_GET['filter_year']  : (int)date('Y');
-
-        if ($selected_month < 1 || $selected_month > 12) $selected_month = (int)date('m');
-        if ($selected_year < 2020 || $selected_year > 2030) $selected_year = (int)date('Y');
-
-        // Analytics 1: Thống kê Doanh Thu Thực Tế (Hôm nay, Tháng được chọn, Tổng cộng, Phí sàn 5%)
+        // Analytics 1: Thống kê Doanh Thu Thực Tế (Hôm nay, Tháng này, Tổng cộng, Phí sàn 5%)
         $revenue_today = (float)($db->query("
             SELECT SUM(TongTienThanhToan) 
             FROM `DonHang` 
@@ -1650,29 +1643,13 @@ try {
               AND (TrangThaiThanhToan IN (b'001', b'010', b'011', 1, 2, 3) OR TrangThaiDonHang NOT IN (b'110', 6))
         ")->fetchColumn() ?: 0);
 
-        // Doanh thu của Tháng & Năm được chọn
-        $stmt_rev_month = $db->prepare("
-            SELECT COALESCE(SUM(TongTienThanhToan), 0) 
+        $revenue_month = (float)($db->query("
+            SELECT SUM(TongTienThanhToan) 
             FROM `DonHang` 
-            WHERE MONTH(NgayTao) = :m 
-              AND YEAR(NgayTao) = :y
+            WHERE MONTH(NgayTao) = MONTH(CURRENT_DATE()) 
+              AND YEAR(NgayTao) = YEAR(CURRENT_DATE())
               AND (TrangThaiThanhToan IN (b'001', b'010', b'011', 1, 2, 3) OR TrangThaiDonHang NOT IN (b'110', 6))
-        ");
-        $stmt_rev_month->execute(['m' => $selected_month, 'y' => $selected_year]);
-        $revenue_selected_month = (float)$stmt_rev_month->fetchColumn();
-
-        // Số đơn hàng trong Tháng & Năm được chọn
-        $stmt_orders_month = $db->prepare("
-            SELECT COUNT(*) 
-            FROM `DonHang` 
-            WHERE MONTH(NgayTao) = :m 
-              AND YEAR(NgayTao) = :y
-              AND (TrangThaiThanhToan IN (b'001', b'010', b'011', 1, 2, 3) OR TrangThaiDonHang NOT IN (b'110', 6))
-        ");
-        $stmt_orders_month->execute(['m' => $selected_month, 'y' => $selected_year]);
-        $orders_selected_month_count = (int)$stmt_orders_month->fetchColumn();
-
-        $platform_fee_selected_month = round($revenue_selected_month * 0.05, 2);
+        ")->fetchColumn() ?: 0);
 
         $total_paid_revenue = (float)($db->query("
             SELECT SUM(TongTienThanhToan) 
@@ -1687,7 +1664,7 @@ try {
         ")->fetchColumn() ?: 0);
 
         $total_revenue_combined = max($total_paid_revenue, $wallet_revenue);
-        $platform_fee_5pct_alltime = round($total_revenue_combined * 0.05, 2);
+        $platform_fee_5pct = round($total_revenue_combined * 0.05, 2);
 
         $total_paid_orders_count = (int)($db->query("
             SELECT COUNT(*) 
@@ -1721,15 +1698,6 @@ try {
                 $revenue_chart_fees[] = round($val * 0.05, 2);
             }
         }
-
-        // Lấy danh sách 5 đơn hàng vừa được thanh toán gần nhất
-        $recent_paid_orders = $db->query("
-            SELECT dh.*, nd.HoTen as TenKhachHang, nd.Email as EmailKhachHang
-            FROM `DonHang` dh
-            JOIN `NguoiDung` nd ON dh.MaNguoiMua = nd.MaNguoiDung
-            ORDER BY dh.NgayTao DESC
-            LIMIT 5
-        ")->fetchAll();
 
         // Analytics 2: Phân bổ Sản phẩm theo Danh mục
         foreach ($category_list as $cat) {
@@ -1868,80 +1836,84 @@ try {
                 </a>
                 <button type="button" onclick="sessionStorage.removeItem('admin_active_tab'); sessionStorage.removeItem('admin_active_tab_title'); const f = document.createElement('form'); f.method = 'POST'; f.action = 'logout.php'; const i = document.createElement('input'); i.type = 'hidden'; i.name = 'csrf_token'; i.value = '<?php echo getCsrfToken(); ?>'; f.appendChild(i); document.body.appendChild(f); f.submit();" class="menu-item text-danger">
                     <span class="menu-icon">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12                    <!-- Export & Month Filter Toolbar Top Bar -->
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    </span> Đăng xuất
+                </button>
+            </nav>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="dashboard-main">
+            <!-- Top Bar -->
+            <header class="dashboard-topbar">
+                <div class="topbar-left">
+                    <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+                    <span class="topbar-page-title" id="pageTitle">Tổng Quan Hệ Thống</span>
+                </div>
+                <div class="topbar-right">
+                    <a href="profile.php" class="topbar-profile-link">
+                        <?php if (!empty($user_data['google_picture'])): ?>
+                            <img src="<?php echo htmlspecialchars($user_data['google_picture']); ?>" alt="Avatar" class="user-avatar-sm">
+                        <?php else: ?>
+                            <span class="user-avatar-sm-fallback"><?php echo strtoupper(substr($user_data['HoTen'] ?? 'U', 0, 1)); ?></span>
+                        <?php endif; ?>
+                        <span class="topbar-username"><?php echo htmlspecialchars($user_data['HoTen']); ?></span>
+                    </a>
+                </div>
+            </header>
+
+            <!-- Main Content Container -->
+            <main class="dashboard-content">
+                <!-- Alert Messages -->
+                <?php if (!empty($success)): ?>
+                    <div class="alert alert-success" style="margin-bottom: 24px; padding: 14px 20px; border-radius: 12px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 0.9rem;">
+                        <?php echo htmlspecialchars($success); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($error)): ?>
+                    <div class="alert alert-error" style="margin-bottom: 24px; padding: 14px 20px; border-radius: 12px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; font-size: 0.9rem;">
+                        <?php echo htmlspecialchars($error); ?>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Tab 0: Overview (Analytics & Charts & Export Toolbar) -->
+                <div id="overview-tab" class="tab-content <?php echo $active_tab === 'overview' ? 'active' : ''; ?>" style="<?php echo $active_tab === 'overview' ? 'display: block;' : 'display: none;'; ?>">
+                    
+                    <!-- Export Toolbar Top Bar -->
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(226, 232, 240, 0.9); border-radius: 20px; padding: 18px 24px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.03);">
                         <div>
                             <h3 style="margin: 0 0 4px 0; font-size: 1.15rem; font-weight: 800; font-family: 'Be Vietnam Pro', sans-serif; color: #0f172a; display: flex; align-items: center; gap: 8px;">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #1e293b;"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
                                 Trung Tâm Báo Cáo & Phân Tích Dữ Liệu
                             </h3>
-                            <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">Thống kê tổng quan hệ thống thời gian thực và xuất báo cáo chuẩn Excel / CSV</p>
+                            <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted);">Thống kê tổng quan hệ thống thời gian thực và xuất báo cáo chuẩn Excel / CSV (Font tiếng Việt UTF-8 BOM)</p>
                         </div>
-
-                        <!-- Bộ Lọc Chọn Tháng & Năm Thống Kê -->
-                        <form method="GET" action="admin.php" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #f8fafc; padding: 8px 14px; border-radius: 14px; border: 1px solid #e2e8f0;">
-                            <input type="hidden" name="tab" value="overview">
-                            <label style="font-weight: 700; font-size: 0.85rem; color: #0f172a; display: flex; align-items: center; gap: 6px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                                Chọn Tháng:
-                            </label>
-                            <select name="filter_month" class="form-control" style="width: 110px; padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; cursor: pointer; background: #ffffff;">
-                                <?php for ($m = 1; $m <= 12; $m++): ?>
-                                    <option value="<?php echo $m; ?>" <?php echo $m === $selected_month ? 'selected' : ''; ?>>Tháng <?php echo $m; ?></option>
-                                <?php endfor; ?>
-                            </select>
-                            <select name="filter_year" class="form-control" style="width: 95px; padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: 700; font-size: 0.85rem; cursor: pointer; background: #ffffff;">
-                                <?php for ($y = date('Y'); $y >= 2023; $y--): ?>
-                                    <option value="<?php echo $y; ?>" <?php echo $y === $selected_year ? 'selected' : ''; ?>>Năm <?php echo $y; ?></option>
-                                <?php endfor; ?>
-                            </select>
-                            <button type="submit" class="btn-action" style="background: #0284c7; color: #ffffff; border: none; padding: 6px 14px; border-radius: 8px; font-weight: 700; font-size: 0.82rem; cursor: pointer; box-shadow: 0 2px 6px rgba(2, 132, 199, 0.3);">
-                                Lọc
-                            </button>
-                        </form>
                         
-                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                            <a href="admin.php?export=revenue" class="btn-action" style="background: #ffffff; color: #0f172a; text-decoration: none; padding: 8px 14px; border-radius: 12px; font-weight: 700; font-size: 0.82rem; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 6px;">
-                                Doanh Thu (Excel)
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <a href="admin.php?export=revenue" class="btn-action" style="background: #f8fafc; color: #0f172a; text-decoration: none; padding: 8px 16px; border-radius: 12px; font-weight: 700; font-size: 0.82rem; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Doanh Thu (CSV/Excel)
                             </a>
-                            <a href="admin.php?export=all" class="btn-action" style="background: #0f172a; color: #ffffff; text-decoration: none; padding: 8px 16px; border-radius: 12px; font-weight: 800; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25); display: inline-flex; align-items: center; gap: 6px;">
-                                Xuất All-In-One
+                            <a href="admin.php?export=products" class="btn-action" style="background: #f8fafc; color: #0f172a; text-decoration: none; padding: 8px 16px; border-radius: 12px; font-weight: 700; font-size: 0.82rem; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"></line><polygon points="12 22.08 12 12 3 6.92 3 17.08 12 22.08"></polygon><polygon points="12 12 21 6.92 21 17.08 12 22.08"></polygon><polygon points="12 2 3 6.92 12 12 21 6.92 12 2"></polygon><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                                Sản Phẩm (CSV/Excel)
+                            </a>
+                            <a href="admin.php?export=users" class="btn-action" style="background: #f8fafc; color: #0f172a; text-decoration: none; padding: 8px 16px; border-radius: 12px; font-weight: 700; font-size: 0.82rem; border: 1px solid #e2e8f0; display: inline-flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                Thành Viên (CSV/Excel)
+                            </a>
+                            <a href="admin.php?export=all" class="btn-action" style="background: #0f172a; color: #ffffff; text-decoration: none; padding: 8px 20px; border-radius: 12px; font-weight: 800; font-size: 0.85rem; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25); display: inline-flex; align-items: center; gap: 6px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+                                Xuất All-In-One Excel
                             </a>
                         </div>
                     </div>
 
-                    <!-- Stats Cards Grid (Doanh Thu Theo Tháng Chọn Rõ Ràng) -->
+                    <!-- Stats Cards Grid (Doanh Thu Hôm Nay & Tháng Này Rõ Ràng) -->
                     <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px;">
                         <div class="stat-card" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff;">
-                            <div class="stat-card-title" style="color: rgba(255,255,255,0.85); font-weight: 600;">Doanh Thu T<?php echo $selected_month . '/' . $selected_year; ?></div>
-                            <div class="stat-card-value" style="color: #ffffff; font-size: 1.45rem;"><?php echo number_format($revenue_selected_month, 0, ',', '.'); ?> đ</div>
-                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); margin-top: 4px;"><?php echo number_format($orders_selected_month_count); ?> đơn đã thanh toán</div>
-                        </div>
-
-                        <div class="stat-card" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff;">
-                            <div class="stat-card-title" style="color: rgba(255,255,255,0.85); font-weight: 600;">Phí Sàn (5%) T<?php echo $selected_month; ?></div>
-                            <div class="stat-card-value" style="color: #ffffff; font-size: 1.45rem;"><?php echo number_format($platform_fee_selected_month, 0, ',', '.'); ?> đ</div>
-                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); margin-top: 4px;">Hoa hồng tháng <?php echo $selected_month . '/' . $selected_year; ?></div>
-                        </div>
-
-                        <div class="stat-card">
-                            <div class="stat-card-title">Doanh Thu Hôm Nay</div>
-                            <div class="stat-card-value" style="color: #0284c7; font-size: 1.45rem;"><?php echo number_format($revenue_today, 0, ',', '.'); ?> đ</div>
-                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Cập nhật tức thì khi có đơn</div>
-                        </div>
-
-                        <div class="stat-card">
-                            <div class="stat-card-title">Tổng Doanh Thu All-Time</div>
-                            <div class="stat-card-value" style="color: #16a34a; font-size: 1.45rem;"><?php echo number_format($total_revenue_combined, 0, ',', '.'); ?> đ</div>
-                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;"><?php echo number_format($total_paid_orders_count); ?> đơn toàn sàn</div>
-                        </div>
-
-                        <div class="stat-card">
-                            <div class="stat-card-title">Tổng Người Dùng</div>
-                            <div class="stat-card-value" style="color: #0f172a; font-size: 1.45rem;"><?php echo number_format($total_users); ?> người</div>
-                            <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;"><?php echo number_format($total_products); ?> sản phẩm toàn sàn</div>
-                        </div>
-                    </div>le" style="color: rgba(255,255,255,0.85); font-weight: 600;">Doanh Thu Hôm Nay</div>
+                            <div class="stat-card-title" style="color: rgba(255,255,255,0.85); font-weight: 600;">Doanh Thu Hôm Nay</div>
                             <div class="stat-card-value" style="color: #ffffff; font-size: 1.45rem;"><?php echo number_format($revenue_today, 0, ',', '.'); ?> đ</div>
                             <div style="font-size: 0.75rem; color: rgba(255,255,255,0.8); margin-top: 4px;">Cập nhật khi có đơn mới</div>
                         </div>
@@ -2027,53 +1999,6 @@ try {
                             <div style="position: relative; height: 280px; width: 100%; display: flex; justify-content: center; align-items: center;">
                                 <canvas id="userRoleChartCanvas"></canvas>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Bảng Danh Sách Đơn Hàng Mới Nhất Vừa Thanh Toán -->
-                    <div class="admin-table-card" style="margin-bottom: 24px; padding: 24px; border-radius: 20px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h4 style="margin: 0; font-size: 1rem; font-weight: 700; color: #0f172a; font-family: 'Be Vietnam Pro', sans-serif; display: flex; align-items: center; gap: 8px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #059669;"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
-                                Đơn Hàng Mới Nhất Vừa Thanh Toán (Cập Nhật Thời Gian Thực)
-                            </h4>
-                            <span style="font-size: 0.82rem; color: #64748b; font-weight: 600;">5 Đơn mới phát sinh</span>
-                        </div>
-
-                        <div class="table-responsive">
-                            <table class="admin-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mã Đơn</th>
-                                        <th>Khách Hàng</th>
-                                        <th>Phương Thức Thanh Toán</th>
-                                        <th>Giá Trị Đơn Hàng</th>
-                                        <th>Trạng Thái Thanh Toán</th>
-                                        <th>Thời Gian Cập Nhật</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($recent_paid_orders)): ?>
-                                        <tr>
-                                            <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">Chưa có phát sinh đơn hàng mới thanh toán.</td>
-                                        </tr>
-                                    <?php else: ?>
-                                        <?php foreach ($recent_paid_orders as $ro): ?>
-                                            <tr>
-                                                <td><strong style="color: #0284c7;">#DH-<?php echo sprintf('%05d', $ro['MaDonHang']); ?></strong></td>
-                                                <td>
-                                                    <strong><?php echo htmlspecialchars($ro['TenKhachHang']); ?></strong>
-                                                    <div style="font-size: 0.78rem; color: var(--text-muted);"><?php echo htmlspecialchars($ro['EmailKhachHang']); ?></div>
-                                                </td>
-                                                <td><span class="badge" style="background: #e0f2fe; color: #0369a1;"><?php echo htmlspecialchars($ro['PhuongThucThanhToan']); ?></span></td>
-                                                <td><strong style="color: #059669; font-size: 1rem;"><?php echo number_format($ro['TongTienThanhToan'], 0, ',', '.'); ?> đ</strong></td>
-                                                <td><span class="badge badge-success">✓ Đã xác nhận thanh toán</span></td>
-                                                <td><span style="font-size: 0.82rem; color: #64748b;"><?php echo date('H:i d/m/Y', strtotime($ro['NgayTao'])); ?></span></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
                         </div>
                     </div>
 
