@@ -332,11 +332,11 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
                         <div class="seller-store-status">🟢 Đang hoạt động</div>
 
                         <div class="seller-store-actions">
-                            <button onclick="alert('Tính năng Theo dõi người bán đang cập nhật!')" class="btn btn-outline store-action-btn">
-                                ➕ Theo Dõi
+                            <button onclick="alert('Tính năng Theo dõi người bán đang cập nhật!')" class="btn btn-outline store-action-btn" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Theo Dõi
                             </button>
-                            <button onclick="alert('Tính năng Chat trực tiếp đang mở rộng!')" class="btn btn-primary store-action-btn">
-                                💬 Trò Chuyện
+                            <button onclick="alert('Tính năng Chat trực tiếp đang mở rộng!')" class="btn btn-primary store-action-btn" style="display: inline-flex; align-items: center; gap: 6px;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Trò Chuyện
                             </button>
                         </div>
                     </div>
@@ -344,32 +344,40 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
 
                 <!-- Cột bên phải: Chỉ số thông tin người bán -->
                 <div class="seller-store-right">
-                    <div class="store-stat-item">
-                        <span class="stat-icon">📦</span>
+                    <div class="store-stat-item" style="display: flex; align-items: center; gap: 12px;">
+                        <span class="stat-icon" style="display: flex; align-items: center;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        </span>
                         <div>
                             <div class="stat-label">Sản phẩm đăng bán:</div>
                             <div class="stat-value"><?php echo count($seller_products); ?> sản phẩm</div>
                         </div>
                     </div>
 
-                    <div class="store-stat-item">
-                        <span class="stat-icon">⭐</span>
+                    <div class="store-stat-item" style="display: flex; align-items: center; gap: 12px;">
+                        <span class="stat-icon" style="display: flex; align-items: center;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                        </span>
                         <div>
                             <div class="stat-label">Điểm Uy Tín:</div>
-                            <div class="stat-value" style="color: #d97706;"><?php echo htmlspecialchars($seller_info['DiemUyTin'] ?? 100); ?> / 100</div>
+                            <div class="stat-value" style="color: #0f172a; font-weight: 800;"><?php echo htmlspecialchars($seller_info['DiemUyTin'] ?? 100); ?> / 100</div>
                         </div>
                     </div>
 
-                    <div class="store-stat-item">
-                        <span class="stat-icon">📍</span>
+                    <div class="store-stat-item" style="display: flex; align-items: center; gap: 12px;">
+                        <span class="stat-icon" style="display: flex; align-items: center;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        </span>
                         <div>
                             <div class="stat-label">Khu vực / Địa chỉ:</div>
                             <div class="stat-value"><?php echo htmlspecialchars($formatted_address); ?></div>
                         </div>
                     </div>
 
-                    <div class="store-stat-item">
-                        <span class="stat-icon">📅</span>
+                    <div class="store-stat-item" style="display: flex; align-items: center; gap: 12px;">
+                        <span class="stat-icon" style="display: flex; align-items: center;">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        </span>
                         <div>
                             <div class="stat-label">Thành viên từ:</div>
                             <div class="stat-value">Tháng <?php echo $created_date; ?></div>
@@ -397,7 +405,9 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
 
             <?php if (empty($seller_products)): ?>
                 <div class="empty-products-state">
-                    <div style="font-size: 3rem; margin-bottom: 12px;">📦</div>
+                    <div style="margin-bottom: 12px;">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                    </div>
                     <h3 style="font-size: 1.2rem; margin-bottom: 8px; color: var(--text-main);">Người bán chưa đăng sản phẩm nào</h3>
                     <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Hiện tại gian hàng này chưa có sản phẩm sẵn sàng giao dịch.</p>
                     <a href="index.php" class="btn btn-primary" style="border-radius: 50px;">Quay lại Trang Chủ</a>
@@ -409,7 +419,7 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
                             $img_list_json = htmlspecialchars(json_encode($prod['Images'] ?? []), ENT_QUOTES, 'UTF-8');
                             $vid_path = htmlspecialchars($prod['VideoThucTe'] ?? '', ENT_QUOTES, 'UTF-8');
                         ?>
-                        <div class="product-card" onclick="openProductModal('<?php echo addslashes(htmlspecialchars($prod['TenSanPham'])); ?>', '<?php echo number_format($prod['GiaBan'], 0, ',', '.'); ?> đ', '<?php echo addslashes(htmlspecialchars($prod['TenDanhMuc'])); ?>', '<?php echo addslashes(htmlspecialchars($prod['TinhTrang'])); ?>', '<?php echo addslashes(htmlspecialchars($prod['TenNguoiBan'])); ?>', '<?php echo $prod['DiemUyTin']; ?>', '<?php echo addslashes(htmlspecialchars($prod['MoTaChiTiet'] ?? 'Chưa có mô tả')); ?>', '<?php echo $img_list_json; ?>', '<?php echo $vid_path; ?>', '<?php echo $seller_id; ?>', '<?php echo addslashes(htmlspecialchars($prod['DuongDanAnh'] ?? '')); ?>')" style="cursor: pointer;">
+                        <div class="product-card" onclick="window.location.href='product_detail.php?id=<?php echo $prod['MaSanPham']; ?>'" style="cursor: pointer;">
                             <div class="product-image-container">
                                 <?php if (!empty($prod['DuongDanAnh'])): ?>
                                     <img src="<?php echo htmlspecialchars($prod['DuongDanAnh']); ?>" alt="Product" style="position: absolute; top:0; left:0; width:100%; height:100%; object-fit: cover;">
@@ -430,7 +440,7 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
                             </div>
 
                             <div class="product-content">
-                                <a href="javascript:void(0)" class="product-title"><?php echo htmlspecialchars($prod['TenSanPham']); ?></a>
+                                <a href="product_detail.php?id=<?php echo $prod['MaSanPham']; ?>" class="product-title"><?php echo htmlspecialchars($prod['TenSanPham']); ?></a>
                                 <div class="product-price"><?php echo number_format($prod['GiaBan'], 0, ',', '.'); ?> đ</div>
 
                                 <div class="product-footer">
