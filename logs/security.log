@@ -73,3 +73,18 @@
 [2026-07-29 11:28:22] [IP: ::1] User ID 1 logged out successfully
 [2026-07-29 11:28:30] [IP: ::1] User ID 2 logged in via Google OAuth successfully
 [2026-08-03 07:53:15] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-08-03 10:31:36] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-08-03 10:52:01] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-08-06 14:37:53] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-08-06 14:56:01] [IP: ::1] User ID 8 registered and logged in successfully
+[2026-08-06 15:04:38] [IP: ::1] Session timeout (idle) for User ID: 1
+[2026-08-06 15:04:46] [IP: ::1] User ID 1 logged in via Google OAuth successfully
+[2026-08-06 15:06:18] [IP: ::1] User ID 1 logged out successfully
+[2026-08-06 15:06:28] [IP: ::1] User ID 5 logged in successfully
+[2026-08-06 15:12:33] [IP: ::1] User ID 7 logged in successfully
+[2026-08-06 15:17:25] [IP: ::1] User ID 7 logged in successfully
+[2026-08-06 15:24:35] [IP: ::1] Unauthorized GET request to logout.php blocked
+[2026-08-06 15:24:55] [IP: ::1] User ID 7 logged out successfully
+[2026-08-06 15:26:17] [IP: ::1] User ID 9 registered and logged in successfully
+[2026-08-06 15:26:50] [IP: ::1] User ID 9 logged out successfully
+[2026-08-06 15:27:19] [IP: ::1] User ID 6 logged in successfully

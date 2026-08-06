@@ -6,6 +6,54 @@ requireLogin();
 $user_id = $_SESSION['user_id'];
 $db = getDBConnection();
 
+// Tự động tạo các bảng phụ trợ cho Shop nếu chưa tồn tại
+try {
+    $db->exec("
+        CREATE TABLE IF NOT EXISTS `CaiDatCuaHang` (
+            `MaCuaHang` INT AUTO_INCREMENT PRIMARY KEY,
+            `MaNguoiBan` INT NOT NULL UNIQUE,
+            `TenCuaHang` VARCHAR(150) NOT NULL,
+            `MoTaCuaHang` TEXT NULL,
+            `EmailLienHe` VARCHAR(100) NULL,
+            `SdtLienHe` VARCHAR(20) NULL,
+            `DiaChiLayHang` TEXT NULL,
+            `DiaChiHoanHang` TEXT NULL,
+            `ThoiGianChuanBi` VARCHAR(50) DEFAULT '24h',
+            `TrangThaiHoatDong` BIT(1) DEFAULT b'1',
+            `NgayTao` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS `LichSuKho` (
+            `MaLichSu` INT AUTO_INCREMENT PRIMARY KEY,
+            `MaSanPham` INT NOT NULL,
+            `NguoiThucHien` INT NOT NULL,
+            `SoLuongCu` INT DEFAULT 0,
+            `SoLuongMoi` INT DEFAULT 0,
+            `LoaiDieuChinh` VARCHAR(50) DEFAULT 'DIEU_CHINH',
+            `LyDo` TEXT NULL,
+            `NgayTao` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS `Voucher` (
+            `MaVoucher` INT AUTO_INCREMENT PRIMARY KEY,
+            `MaNguoiBan` INT NOT NULL,
+            `MaCode` VARCHAR(50) NOT NULL,
+            `LoaiGiamGia` VARCHAR(20) DEFAULT 'TIEN',
+            `GiaTriGiam` DECIMAL(15,2) DEFAULT 0,
+            `GiaTriDonToiThieu` DECIMAL(15,2) DEFAULT 0,
+            `GiamToiDa` DECIMAL(15,2) DEFAULT 0,
+            `SoLuong` INT DEFAULT 100,
+            `DaSuDung` INT DEFAULT 0,
+            `NgayBatDau` DATETIME NULL,
+            `NgayKetThuc` DATETIME NULL,
+            `TrangThai` BIT(1) DEFAULT b'1',
+            `NgayTao` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    ");
+} catch (Exception $e) {
+    // Bỏ qua nếu đã tồn tại
+}
+
 // Lấy thông tin tài khoản
 $stmt = $db->prepare("SELECT * FROM `NguoiDung` WHERE `MaNguoiDung` = :id");
 $stmt->execute(['id' => $user_id]);
@@ -555,6 +603,11 @@ $avg_rating = (float)($db->query("
                     <li class="seller-menu-item">
                         <a href="seller_dashboard.php?tab=dashboard" class="seller-menu-link <?php echo $tab === 'dashboard' ? 'active' : ''; ?>">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg> Trang Tổng Quan
+                        </a>
+                    </li>
+                    <li class="seller-menu-item">
+                        <a href="chat.php" class="seller-menu-link" style="color: #4f46e5; font-weight: 600;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Tin Nhắn Khách Hàng
                         </a>
                     </li>
                     <li class="seller-menu-item">

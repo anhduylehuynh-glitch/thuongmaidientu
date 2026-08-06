@@ -335,9 +335,9 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
                             <button onclick="alert('Tính năng Theo dõi người bán đang cập nhật!')" class="btn btn-outline store-action-btn" style="display: inline-flex; align-items: center; gap: 6px;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> Theo Dõi
                             </button>
-                            <button onclick="alert('Tính năng Chat trực tiếp đang mở rộng!')" class="btn btn-primary store-action-btn" style="display: inline-flex; align-items: center; gap: 6px;">
+                            <a href="chat.php?partner_id=<?php echo $seller_id; ?>" class="btn btn-primary store-action-btn" style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none;">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg> Trò Chuyện
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>

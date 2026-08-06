@@ -568,7 +568,10 @@ $cart_count = getCartItemCount();
                                 <div style="font-size: 0.85rem; color: #d97706; font-weight: 600;"><?php echo htmlspecialchars($product['DiemUyTin']); ?> Điểm Uy Tín</div>
                             </div>
                         </div>
-                        <a href="seller.php?id=<?php echo $product['MaNguoiBan']; ?>" class="btn btn-outline" style="border-radius: 50px; font-size: 0.85rem; padding: 6px 16px;">Xem Cửa Hàng</a>
+                        <div style="display: flex; gap: 8px;">
+                            <a href="chat.php?partner_id=<?php echo $product['MaNguoiBan']; ?>&product_id=<?php echo $product['MaSanPham']; ?>" class="btn btn-primary" style="border-radius: 50px; font-size: 0.85rem; padding: 6px 14px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;">💬 Chat</a>
+                            <a href="seller.php?id=<?php echo $product['MaNguoiBan']; ?>" class="btn btn-outline" style="border-radius: 50px; font-size: 0.85rem; padding: 6px 14px; text-decoration: none;">Xem Cửa Hàng</a>
+                        </div>
                     </div>
 
                     <!-- Description -->

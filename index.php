@@ -481,6 +481,7 @@ if (empty($products) && empty($keyword) && empty($category)) {
                             </span>
                         <?php endif; ?>
                     </a>
+                    <a href="chat.php" class="nav-link" style="font-weight: 600;">Tin Nhắn</a>
                     <a href="post_product.php" class="nav-link" style="color: var(--primary); font-weight: 700;">Đăng Bán</a>
 
                     <?php if ($is_logged_in && in_array('ADMIN', $user_roles)): ?>
@@ -508,6 +509,9 @@ if (empty($products) && empty($keyword) && empty($category)) {
                                 </div>
                                 <a href="profile.php" class="dropdown-item">
                                     Hồ sơ cá nhân
+                                </a>
+                                <a href="chat.php" class="dropdown-item" style="color: #4f46e5; font-weight: 600;">
+                                    💬 Tin Nhắn Khách Hàng
                                 </a>
                                 <a href="orders.php" class="dropdown-item">
                                     Đơn hàng của tôi
