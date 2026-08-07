@@ -119,3 +119,62 @@ function getCartItemCount()
     }
 }
 
+/**
+ * Trả về mức cộng/trừ điểm uy tín tương ứng với số sao đánh giá:
+ * - 5 sao: +3 điểm
+ * - 4 sao: +1 điểm
+ * - 3 sao: 0 điểm
+ * - 2 sao: -2 điểm
+ * - 1 sao: -5 điểm (giảm nhiều nhất)
+ */
+function getReputationDeltaForStars(int $stars): int
+{
+    switch ($stars) {
+        case 5:
+            return 3;
+        case 4:
+            return 1;
+        case 3:
+            return 0;
+        case 2:
+            return -2;
+        case 1:
+            return -5;
+        default:
+            return 0;
+    }
+}
+
+/**
+ * Cập nhật điểm uy tín của người bán dựa trên đánh giá sản phẩm (tối đa 100, tối thiểu 0)
+ */
+function updateSellerReputationByProduct($db, int $productId, int $oldStars = 0, int $newStars = 0)
+{
+    if (!$db || $productId <= 0) return;
+
+    // Lấy Mã người bán từ ID sản phẩm
+    $stmt = $db->prepare("SELECT MaNguoiBan FROM SanPham WHERE MaSanPham = :pid");
+    $stmt->execute(['pid' => $productId]);
+    $sellerId = $stmt->fetchColumn();
+
+    if (!$sellerId) return;
+
+    $oldDelta = $oldStars > 0 ? getReputationDeltaForStars($oldStars) : 0;
+    $newDelta = $newStars > 0 ? getReputationDeltaForStars($newStars) : 0;
+    $netDelta = $newDelta - $oldDelta;
+
+    if ($netDelta === 0) return;
+
+    // Lấy điểm uy tín hiện tại của người bán
+    $uStmt = $db->prepare("SELECT DiemUyTin FROM NguoiDung WHERE MaNguoiDung = :uid");
+    $uStmt->execute(['uid' => $sellerId]);
+    $currentRep = (int)($uStmt->fetchColumn() ?? 0);
+
+    // Giới hạn điểm trong khoảng từ 0 đến 100
+    $updatedRep = max(0, min(100, $currentRep + $netDelta));
+
+    // Cập nhật lại vào cơ sở dữ liệu
+    $upStmt = $db->prepare("UPDATE NguoiDung SET DiemUyTin = :rep WHERE MaNguoiDung = :uid");
+    $upStmt->execute(['rep' => $updatedRep, 'uid' => $sellerId]);
+}
+

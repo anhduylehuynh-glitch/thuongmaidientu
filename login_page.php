@@ -94,10 +94,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($fullname) || empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
             $error = 'Vui lòng điền đầy đủ các thông tin bắt buộc.';
-        } elseif ($password !== $confirm_password) {
-            $error = 'Mật khẩu xác nhận không khớp.';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Định dạng email không hợp lệ.';
+        } elseif (mb_strlen($password) < 6) {
+            $error = 'Mật khẩu phải có ít nhất 6 ký tự.';
+        } elseif (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password) || !preg_match('/[^a-zA-Z0-9]/', $password)) {
+            $error = 'Mật khẩu phải chứa ít nhất 1 chữ cái viết hoa, 1 chữ cái viết thường, 1 chữ số và 1 ký tự đặc biệt.';
+        } elseif ($password !== $confirm_password) {
+            $error = 'Mật khẩu xác nhận không khớp.';
         } else {
             try {
                 $db = getDBConnection();
@@ -257,7 +261,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <!-- Form Đăng Ký -->
                 <div id="register-view" class="form-view">
-                    <form method="POST" action="login_page.php<?php echo isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''; ?>">
+                    <form method="POST" action="login_page.php<?php echo isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''; ?>" id="registerForm" onsubmit="return validateRegisterForm(event)">
                         <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
                         <div class="form-group">
                             <label for="reg_fullname">Họ và tên <span style="color:var(--error)">*</span></label>
@@ -278,6 +282,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="form-group">
                             <label for="reg_password">Mật khẩu <span style="color:var(--error)">*</span></label>
                             <input type="password" name="password" id="reg_password" class="form-control" placeholder="••••••••" required>
+                            <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px; display: block; text-align: left;">
+                                Mật khẩu phải có ít nhất 6 ký tự (bao gồm ít nhất 1 chữ viết hoa, 1 chữ viết thường, 1 chữ số và 1 ký tự đặc biệt).
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="reg_confirm_password">Xác nhận mật khẩu <span style="color:var(--error)">*</span></label>
@@ -319,6 +326,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </div>
 
     <script>
+        function validateRegisterForm(e) {
+            const password = document.getElementById('reg_password').value;
+            const confirmPassword = document.getElementById('reg_confirm_password').value;
+
+            if (password.length < 6) {
+                alert('Mật khẩu phải có ít nhất 6 ký tự.');
+                e.preventDefault();
+                return false;
+            }
+
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasDigit = /[0-9]/.test(password);
+            const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+
+            if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
+                alert('Mật khẩu phải chứa ít nhất 1 chữ cái viết hoa, 1 chữ cái viết thường, 1 chữ số và 1 ký tự đặc biệt.');
+                e.preventDefault();
+                return false;
+            }
+
+            if (password !== confirmPassword) {
+                alert('Mật khẩu xác nhận không khớp.');
+                e.preventDefault();
+                return false;
+            }
+
+            return true;
+        }
+
         function switchTab(tabName) {
             // Deactivate all tab buttons
             document.querySelectorAll('.tab-btn').forEach(btn => {

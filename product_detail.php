@@ -110,7 +110,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
     }
     
-    if ($action === 'add_review') {
+    if ($action === 'add_review' || $action === 'edit_review') {
         if (!$is_logged_in) {
             $_SESSION['flash_error'] = "Vui lòng đăng nhập để gửi đánh giá!";
             header("Location: product_detail.php?id=" . $product_id);
@@ -121,19 +121,65 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $so_sao = max(1, min(5, $so_sao));
         $nhan_xet = trim($_POST['nhan_xet'] ?? '');
         
+        if (empty($nhan_xet)) {
+            $_SESSION['flash_error'] = "Vui lòng nhập nội dung đánh giá!";
+            header("Location: product_detail.php?id=" . $product_id);
+            exit;
+        }
+        
         try {
             $db = getDBConnection();
-            $stmt = $db->prepare("
-                INSERT INTO DonDanhGiaSanPham (MaSanPham, MaNguoiDanhGia, SoSao, NhanXet)
-                VALUES (:pid, :uid, :sao, :nx)
+
+            // Kiểm tra xem người dùng đã đánh giá sản phẩm này chưa
+            $check_stmt = $db->prepare("
+                SELECT MaDanhGia, SoSao FROM DonDanhGiaSanPham 
+                WHERE MaSanPham = :pid AND MaNguoiDanhGia = :uid
             ");
-            $stmt->execute([
+            $check_stmt->execute([
                 'pid' => $product_id,
-                'uid' => $user_data['MaNguoiDung'],
-                'sao' => $so_sao,
-                'nx' => $nhan_xet
+                'uid' => $user_data['MaNguoiDung']
             ]);
-            $_SESSION['flash_success'] = "Cảm ơn bạn đã gửi đánh giá cho sản phẩm!";
+            $existing_review = $check_stmt->fetch();
+
+            if ($existing_review) {
+                $old_sao = (int)$existing_review['SoSao'];
+                $existing_review_id = $existing_review['MaDanhGia'];
+
+                // Cập nhật lại đánh giá đã có
+                $update_stmt = $db->prepare("
+                    UPDATE DonDanhGiaSanPham 
+                    SET SoSao = :sao, NhanXet = :nx, NgayDanhGia = NOW()
+                    WHERE MaDanhGia = :rid AND MaNguoiDanhGia = :uid
+                ");
+                $update_stmt->execute([
+                    'sao' => $so_sao,
+                    'nx' => $nhan_xet,
+                    'rid' => $existing_review_id,
+                    'uid' => $user_data['MaNguoiDung']
+                ]);
+
+                // Cập nhật điểm uy tín người bán dựa trên chênh lệch số sao
+                updateSellerReputationByProduct($db, $product_id, $old_sao, $so_sao);
+
+                $_SESSION['flash_success'] = "Đã cập nhật đánh giá của bạn thành công!";
+            } else {
+                // Thêm đánh giá mới lần đầu
+                $stmt = $db->prepare("
+                    INSERT INTO DonDanhGiaSanPham (MaSanPham, MaNguoiDanhGia, SoSao, NhanXet)
+                    VALUES (:pid, :uid, :sao, :nx)
+                ");
+                $stmt->execute([
+                    'pid' => $product_id,
+                    'uid' => $user_data['MaNguoiDung'],
+                    'sao' => $so_sao,
+                    'nx' => $nhan_xet
+                ]);
+
+                // Cập nhật điểm uy tín người bán cho đánh giá mới
+                updateSellerReputationByProduct($db, $product_id, 0, $so_sao);
+
+                $_SESSION['flash_success'] = "Cảm ơn bạn đã gửi đánh giá cho sản phẩm!";
+            }
         } catch (Exception $e) {
             $_SESSION['flash_error'] = "Không thể gửi đánh giá: " . $e->getMessage();
         }
@@ -170,6 +216,16 @@ try {
         ");
         $rev_stmt->execute(['pid' => $product_id]);
         $reviews = $rev_stmt->fetchAll();
+
+        $my_review = null;
+        if ($is_logged_in && !empty($user_data['MaNguoiDung'])) {
+            foreach ($reviews as $r) {
+                if ((int)$r['MaNguoiDanhGia'] === (int)$user_data['MaNguoiDung']) {
+                    $my_review = $r;
+                    break;
+                }
+            }
+        }
 
         $total_reviews = count($reviews);
         if ($total_reviews > 0) {
@@ -638,32 +694,113 @@ $cart_count = getCartItemCount();
                     </div>
                 </div>
 
-                <!-- Submit Review Form -->
+                <!-- Submit / Edit Review Form -->
                 <div style="background: #f8fafc; border-radius: 16px; padding: 24px; margin-bottom: 32px; border: 1px solid #e2e8f0;">
-                    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">Viết đánh giá của bạn</h3>
                     <?php if ($is_logged_in): ?>
-                        <form method="POST" action="product_detail.php?id=<?php echo $product_id; ?>">
-                            <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
-                            <input type="hidden" name="action" value="add_review">
+                        <?php if ($my_review): ?>
+                            <!-- Người dùng đã đánh giá -> Hiển thị đánh giá hiện tại và nút Chỉnh Sửa -->
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <h3 style="font-size: 1.05rem; font-weight: 700; margin: 0; color: var(--text-main);">
+                                    <span style="display: inline-block; background: #e0f2fe; color: #0284c7; font-size: 0.75rem; padding: 3px 8px; border-radius: 6px; vertical-align: middle; margin-right: 6px;">Đã đánh giá</span>
+                                    Đánh giá của bạn
+                                </h3>
+                                <button type="button" id="toggle-edit-btn" onclick="toggleEditReview()" class="btn btn-sm" style="border: 1px solid #cbd5e1; background: white; color: var(--text-main); font-weight: 600; border-radius: 8px; padding: 6px 14px; cursor: pointer;">
+                                    ✏️ Chỉnh sửa đánh giá
+                                </button>
+                            </div>
 
-                            <div style="margin-bottom: 12px;">
-                                <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">Chọn mức độ hài lòng:</label>
-                                <div class="star-rating-select">
-                                    <input type="radio" id="star5" name="so_sao" value="5" checked><label for="star5" title="5 sao">★</label>
-                                    <input type="radio" id="star4" name="so_sao" value="4"><label for="star4" title="4 sao">★</label>
-                                    <input type="radio" id="star3" name="so_sao" value="3"><label for="star3" title="3 sao">★</label>
-                                    <input type="radio" id="star2" name="so_sao" value="2"><label for="star2" title="2 sao">★</label>
-                                    <input type="radio" id="star1" name="so_sao" value="1"><label for="star1" title="1 sao">★</label>
+                            <!-- Display mode -->
+                            <div id="my-review-display" style="background: white; border-radius: 12px; padding: 16px; border: 1px solid #e2e8f0; margin-top: 10px;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                    <div class="stars-display" style="font-size: 1.1rem; color: #f59e0b;">
+                                        <?php 
+                                            for ($i = 1; $i <= 5; $i++) {
+                                                echo $i <= (int)$my_review['SoSao'] ? '★' : '☆';
+                                            }
+                                        ?>
+                                        <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-main); margin-left: 6px;">(<?php echo $my_review['SoSao']; ?>/5 sao)</span>
+                                    </div>
+                                    <span style="font-size: 0.8rem; color: var(--text-muted);">
+                                        Cập nhật: <?php echo date('d/m/Y H:i', strtotime($my_review['NgayDanhGia'])); ?>
+                                    </span>
                                 </div>
+                                <p style="font-size: 0.95rem; color: var(--text-main); margin: 0; line-height: 1.5;">
+                                    <?php echo htmlspecialchars($my_review['NhanXet']); ?>
+                                </p>
                             </div>
 
-                            <div style="margin-bottom: 16px;">
-                                <textarea name="nhan_xet" rows="3" placeholder="Chia sẻ trải nghiệm hoặc cảm nhận của bạn về sản phẩm này..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;" required></textarea>
+                            <!-- Edit Form (Ban đầu ẩn) -->
+                            <div id="my-review-edit-form" style="display: none; margin-top: 14px;">
+                                <form method="POST" action="product_detail.php?id=<?php echo $product_id; ?>">
+                                    <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                                    <input type="hidden" name="action" value="edit_review">
+
+                                    <div style="margin-bottom: 12px;">
+                                        <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">Thay đổi mức độ hài lòng:</label>
+                                        <div class="star-rating-select">
+                                            <?php for ($s = 5; $s >= 1; $s--): ?>
+                                                <input type="radio" id="edit_star<?php echo $s; ?>" name="so_sao" value="<?php echo $s; ?>" <?php echo ((int)$my_review['SoSao'] === $s) ? 'checked' : ''; ?>>
+                                                <label for="edit_star<?php echo $s; ?>" title="<?php echo $s; ?> sao">★</label>
+                                            <?php endfor; ?>
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-bottom: 16px;">
+                                        <textarea name="nhan_xet" rows="3" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;" required><?php echo htmlspecialchars($my_review['NhanXet']); ?></textarea>
+                                    </div>
+
+                                    <div style="display: flex; gap: 10px;">
+                                        <button type="submit" class="btn btn-primary" style="border-radius: 50px; padding: 8px 20px;">Lưu Thay Đổi</button>
+                                        <button type="button" onclick="toggleEditReview()" class="btn" style="border-radius: 50px; padding: 8px 20px; background: #e2e8f0; color: var(--text-main);">Hủy</button>
+                                    </div>
+                                </form>
                             </div>
 
-                            <button type="submit" class="btn btn-primary" style="border-radius: 50px; padding: 10px 24px;">Gửi Đánh Giá</button>
-                        </form>
+                            <script>
+                                function toggleEditReview() {
+                                    const displayDiv = document.getElementById('my-review-display');
+                                    const editDiv = document.getElementById('my-review-edit-form');
+                                    const btn = document.getElementById('toggle-edit-btn');
+                                    if (editDiv.style.display === 'none') {
+                                        editDiv.style.display = 'block';
+                                        displayDiv.style.display = 'none';
+                                        if (btn) btn.style.display = 'none';
+                                    } else {
+                                        editDiv.style.display = 'none';
+                                        displayDiv.style.display = 'block';
+                                        if (btn) btn.style.display = 'inline-block';
+                                    }
+                                }
+                            </script>
+
+                        <?php else: ?>
+                            <!-- Chưa đánh giá: Form tạo mới lần đầu -->
+                            <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 4px;">Viết đánh giá của bạn</h3>
+                            <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px;">Mỗi tài khoản được gửi 1 đánh giá và chọn sao 1 lần cho sản phẩm này (có thể chỉnh sửa sau khi gửi).</p>
+                            <form method="POST" action="product_detail.php?id=<?php echo $product_id; ?>">
+                                <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                                <input type="hidden" name="action" value="add_review">
+
+                                <div style="margin-bottom: 12px;">
+                                    <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">Chọn mức độ hài lòng:</label>
+                                    <div class="star-rating-select">
+                                        <input type="radio" id="star5" name="so_sao" value="5" checked><label for="star5" title="5 sao">★</label>
+                                        <input type="radio" id="star4" name="so_sao" value="4"><label for="star4" title="4 sao">★</label>
+                                        <input type="radio" id="star3" name="so_sao" value="3"><label for="star3" title="3 sao">★</label>
+                                        <input type="radio" id="star2" name="so_sao" value="2"><label for="star2" title="2 sao">★</label>
+                                        <input type="radio" id="star1" name="so_sao" value="1"><label for="star1" title="1 sao">★</label>
+                                    </div>
+                                </div>
+
+                                <div style="margin-bottom: 16px;">
+                                    <textarea name="nhan_xet" rows="3" placeholder="Chia sẻ trải nghiệm hoặc cảm nhận của bạn về sản phẩm này..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;" required></textarea>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary" style="border-radius: 50px; padding: 10px 24px;">Gửi Đánh Giá</button>
+                            </form>
+                        <?php endif; ?>
                     <?php else: ?>
+                        <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">Viết đánh giá của bạn</h3>
                         <p style="font-size: 0.9rem; color: var(--text-muted); margin: 0;">
                             Vui lòng <a href="login_page.php" style="color: var(--primary); font-weight: 700;">Đăng Nhập</a> để viết nhận xét và đánh giá sản phẩm.
                         </p>
@@ -689,7 +826,12 @@ $cart_count = getCartItemCount();
                                             </div>
                                         <?php endif; ?>
                                         <div>
-                                            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);"><?php echo htmlspecialchars($rev['HoTen'] ?? 'Người dùng'); ?></div>
+                                            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); display: flex; align-items: center; gap: 6px;">
+                                                <?php echo htmlspecialchars($rev['HoTen'] ?? 'Người dùng'); ?>
+                                                <?php if ($is_logged_in && (int)$rev['MaNguoiDanhGia'] === (int)$user_data['MaNguoiDung']): ?>
+                                                    <span style="background: #e0f2fe; color: #0284c7; font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: 600;">Bạn</span>
+                                                <?php endif; ?>
+                                            </div>
                                             <div class="stars-display" style="font-size: 0.85rem; margin: 0;">
                                                 <?php 
                                                     for ($i = 1; $i <= 5; $i++) {
@@ -699,7 +841,12 @@ $cart_count = getCartItemCount();
                                             </div>
                                         </div>
                                     </div>
-                                    <span style="font-size: 0.8rem; color: var(--text-muted);"><?php echo date('d/m/Y H:i', strtotime($rev['NgayDanhGia'])); ?></span>
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span style="font-size: 0.8rem; color: var(--text-muted);"><?php echo date('d/m/Y H:i', strtotime($rev['NgayDanhGia'])); ?></span>
+                                        <?php if ($is_logged_in && (int)$rev['MaNguoiDanhGia'] === (int)$user_data['MaNguoiDung']): ?>
+                                            <button type="button" onclick="toggleEditReview()" style="border: none; background: transparent; color: var(--primary); font-size: 0.8rem; font-weight: 600; cursor: pointer; text-decoration: underline;">Sửa</button>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                                 <p style="font-size: 0.95rem; color: var(--text-main); margin-top: 8px; line-height: 1.5;">
                                     <?php echo htmlspecialchars($rev['NhanXet']); ?>

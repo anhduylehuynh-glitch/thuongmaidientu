@@ -817,6 +817,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST' && isset($_POST['action']))
             if ($ma_danh_gia <= 0) {
                 throw new Exception("Mã đánh giá không hợp lệ.");
             }
+            $rev_stmt = $db->prepare("SELECT MaSanPham, SoSao FROM `DonDanhGiaSanPham` WHERE `MaDanhGia` = :id");
+            $rev_stmt->execute(['id' => $ma_danh_gia]);
+            $rev_info = $rev_stmt->fetch();
+            if ($rev_info) {
+                updateSellerReputationByProduct($db, (int)$rev_info['MaSanPham'], (int)$rev_info['SoSao'], 0);
+            }
             $del_dg = $db->prepare("DELETE FROM `DonDanhGiaSanPham` WHERE `MaDanhGia` = :id");
             $del_dg->execute(['id' => $ma_danh_gia]);
             $success = "Đã xóa đánh giá sản phẩm #" . $ma_danh_gia;
