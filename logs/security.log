@@ -110,3 +110,5 @@
 [2026-08-07 03:41:39] [IP: ::1] User ID 1 logged in via Google OAuth successfully
 [2026-08-07 03:42:32] [IP: ::1] User ID 13 logged out successfully
 [2026-08-07 03:43:32] [IP: ::1] Password reset successfully for email: anhkhoalehuynhvl2014@gmail.com
+[2026-08-07 03:45:24] [IP: ::1] Failed login attempt for: anhkhoa
+[2026-08-07 03:45:48] [IP: ::1] User ID 13 logged in successfully

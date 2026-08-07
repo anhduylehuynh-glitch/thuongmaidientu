@@ -117,12 +117,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             exit;
         }
         
-        $so_sao = (int)($_POST['so_sao'] ?? 5);
-        $so_sao = max(1, min(5, $so_sao));
+        $so_sao = isset($_POST['so_sao']) ? (int)$_POST['so_sao'] : 0;
         $nhan_xet = trim($_POST['nhan_xet'] ?? '');
         
-        if (empty($nhan_xet)) {
-            $_SESSION['flash_error'] = "Vui lòng nhập nội dung đánh giá!";
+        if ($so_sao < 1 || $so_sao > 5) {
+            $_SESSION['flash_error'] = "Vui lòng chọn số sao đánh giá (từ 1 đến 5 sao)!";
             header("Location: product_detail.php?id=" . $product_id);
             exit;
         }
@@ -661,7 +660,7 @@ $cart_count = getCartItemCount();
             </div>
 
             <!-- Rating & Reviews Section -->
-            <div class="rating-summary-card">
+            <div class="rating-summary-card" id="rating-section">
                 <h2 style="font-size: 1.4rem; font-weight: 800; margin-bottom: 24px;">Đánh Giá & Nhận Xét Sản Phẩm</h2>
 
                 <div class="rating-overview">
@@ -724,9 +723,11 @@ $cart_count = getCartItemCount();
                                         Cập nhật: <?php echo date('d/m/Y H:i', strtotime($my_review['NgayDanhGia'])); ?>
                                     </span>
                                 </div>
-                                <p style="font-size: 0.95rem; color: var(--text-main); margin: 0; line-height: 1.5;">
-                                    <?php echo htmlspecialchars($my_review['NhanXet']); ?>
-                                </p>
+                                <?php if (!empty(trim($my_review['NhanXet'] ?? ''))): ?>
+                                    <p style="font-size: 0.95rem; color: var(--text-main); margin-top: 8px; line-height: 1.5;">
+                                        <?php echo htmlspecialchars($my_review['NhanXet']); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
 
                             <!-- Edit Form (Ban đầu ẩn) -->
@@ -746,7 +747,7 @@ $cart_count = getCartItemCount();
                                     </div>
 
                                     <div style="margin-bottom: 16px;">
-                                        <textarea name="nhan_xet" rows="3" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;" required><?php echo htmlspecialchars($my_review['NhanXet']); ?></textarea>
+                                        <textarea name="nhan_xet" rows="3" placeholder="Nhập nhận xét của bạn (tùy chọn)..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;"><?php echo htmlspecialchars($my_review['NhanXet']); ?></textarea>
                                     </div>
 
                                     <div style="display: flex; gap: 10px;">
@@ -761,10 +762,14 @@ $cart_count = getCartItemCount();
                                     const displayDiv = document.getElementById('my-review-display');
                                     const editDiv = document.getElementById('my-review-edit-form');
                                     const btn = document.getElementById('toggle-edit-btn');
-                                    if (editDiv.style.display === 'none') {
+                                    if (!editDiv || !displayDiv) return;
+
+                                    if (editDiv.style.display === 'none' || editDiv.style.display === '') {
                                         editDiv.style.display = 'block';
                                         displayDiv.style.display = 'none';
                                         if (btn) btn.style.display = 'none';
+                                        const sec = document.getElementById('rating-section');
+                                        if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                     } else {
                                         editDiv.style.display = 'none';
                                         displayDiv.style.display = 'block';
@@ -782,9 +787,9 @@ $cart_count = getCartItemCount();
                                 <input type="hidden" name="action" value="add_review">
 
                                 <div style="margin-bottom: 12px;">
-                                    <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">Chọn mức độ hài lòng:</label>
+                                    <label style="font-size: 0.9rem; font-weight: 600; color: var(--text-muted);">Chọn mức độ hài lòng <span style="color:var(--error)">*</span>:</label>
                                     <div class="star-rating-select">
-                                        <input type="radio" id="star5" name="so_sao" value="5" checked><label for="star5" title="5 sao">★</label>
+                                        <input type="radio" id="star5" name="so_sao" value="5" required><label for="star5" title="5 sao">★</label>
                                         <input type="radio" id="star4" name="so_sao" value="4"><label for="star4" title="4 sao">★</label>
                                         <input type="radio" id="star3" name="so_sao" value="3"><label for="star3" title="3 sao">★</label>
                                         <input type="radio" id="star2" name="so_sao" value="2"><label for="star2" title="2 sao">★</label>
@@ -793,7 +798,7 @@ $cart_count = getCartItemCount();
                                 </div>
 
                                 <div style="margin-bottom: 16px;">
-                                    <textarea name="nhan_xet" rows="3" placeholder="Chia sẻ trải nghiệm hoặc cảm nhận của bạn về sản phẩm này..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;" required></textarea>
+                                    <textarea name="nhan_xet" rows="3" placeholder="Chia sẻ trải nghiệm hoặc cảm nhận của bạn về sản phẩm này (tùy chọn)..." style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #cbd5e1; font-family: inherit; font-size: 0.95rem; resize: vertical;"></textarea>
                                 </div>
 
                                 <button type="submit" class="btn btn-primary" style="border-radius: 50px; padding: 10px 24px;">Gửi Đánh Giá</button>
@@ -848,9 +853,11 @@ $cart_count = getCartItemCount();
                                         <?php endif; ?>
                                     </div>
                                 </div>
-                                <p style="font-size: 0.95rem; color: var(--text-main); margin-top: 8px; line-height: 1.5;">
-                                    <?php echo htmlspecialchars($rev['NhanXet']); ?>
-                                </p>
+                                <?php if (!empty(trim($rev['NhanXet'] ?? ''))): ?>
+                                    <p style="font-size: 0.95rem; color: var(--text-main); margin-top: 8px; line-height: 1.5;">
+                                        <?php echo htmlspecialchars($rev['NhanXet']); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
                         <?php endforeach; ?>
                     <?php endif; ?>
