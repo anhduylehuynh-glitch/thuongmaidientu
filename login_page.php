@@ -94,14 +94,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($fullname) || empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
             $error = 'Vui lòng điền đầy đủ các thông tin bắt buộc.';
+            $active_tab = 'register';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'Định dạng email không hợp lệ.';
+            $active_tab = 'register';
+        } elseif (!empty($phone) && !isValidVNPhoneNumber($phone)) {
+            $error = 'Số điện thoại không hợp lệ (phải gồm 10 chữ số và bắt đầu bằng 03, 05, 07, 08, 09).';
+            $active_tab = 'register';
         } elseif (mb_strlen($password) < 6) {
             $error = 'Mật khẩu phải có ít nhất 6 ký tự.';
+            $active_tab = 'register';
         } elseif (!preg_match('/[A-Z]/', $password) || !preg_match('/[a-z]/', $password) || !preg_match('/[0-9]/', $password) || !preg_match('/[^a-zA-Z0-9]/', $password)) {
             $error = 'Mật khẩu phải chứa ít nhất 1 chữ cái viết hoa, 1 chữ cái viết thường, 1 chữ số và 1 ký tự đặc biệt.';
+            $active_tab = 'register';
         } elseif ($password !== $confirm_password) {
             $error = 'Mật khẩu xác nhận không khớp.';
+            $active_tab = 'register';
         } else {
             try {
                 $db = getDBConnection();
@@ -111,22 +119,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute(['username' => $username, 'email' => $email]);
                 if ($stmt->fetchColumn() > 0) {
                     $error = 'Tên đăng nhập hoặc Email đã tồn tại trên hệ thống.';
+                    $active_tab = 'register';
                 } else {
-                    // Mã hóa mật khẩu
-                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                    // Tạo mã OTP 6 chữ số
+                    $otp_code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
-                    // Thêm người dùng mới
+                    // Lưu thông tin tạm vào SESSION
+                    $_SESSION['pending_register'] = [
+                        'fullname' => $fullname,
+                        'username' => $username,
+                        'email'    => $email,
+                        'phone'    => !empty($phone) ? $phone : null,
+                        'password' => password_hash($password, PASSWORD_DEFAULT),
+                    ];
+                    $_SESSION['otp_data'] = [
+                        'code'    => $otp_code,
+                        'email'   => $email,
+                        'expire'  => time() + 300, // Hết hạn sau 5 phút
+                        'purpose' => 'register'
+                    ];
+
+                    // Gửi Email OTP
+                    if (sendOTPEmail($email, $otp_code, 'register')) {
+                        $success = "Mã xác thực OTP đã được gửi đến email <strong>" . htmlspecialchars($email) . "</strong>. Vui lòng nhập mã để hoàn tất đăng ký.";
+                        $active_tab = 'verify_register_otp';
+                    } else {
+                        $error = "Không thể gửi email OTP đến <strong>" . htmlspecialchars($email) . "</strong>. Vui lòng kiểm tra lại địa chỉ email hoặc thử lại sau.";
+                        $active_tab = 'register';
+                    }
+                }
+            } catch (Exception $e) {
+                $error = 'Lỗi hệ thống đăng ký: ' . $e->getMessage();
+                $active_tab = 'register';
+            }
+        }
+    } elseif (isset($_POST['action_verify_register_otp'])) {
+        $otp_code = trim($_POST['otp_code'] ?? '');
+        $pending = $_SESSION['pending_register'] ?? null;
+        $otp_data = $_SESSION['otp_data'] ?? null;
+
+        if (!$pending || !$otp_data || $otp_data['purpose'] !== 'register') {
+            $error = 'Phiên xác thực OTP đã hết hạn hoặc không hợp lệ. Vui lòng đăng ký lại.';
+            $active_tab = 'register';
+        } elseif (empty($otp_code)) {
+            $error = 'Vui lòng nhập mã OTP 6 chữ số.';
+            $active_tab = 'verify_register_otp';
+        } elseif (time() > $otp_data['expire']) {
+            $error = 'Mã OTP đã hết hạn (5 phút). Vui lòng bấm gửi lại mã.';
+            $active_tab = 'verify_register_otp';
+        } elseif ($otp_code !== $otp_data['code']) {
+            $error = 'Mã OTP không chính xác. Vui lòng kiểm tra lại email.';
+            $active_tab = 'verify_register_otp';
+        } else {
+            try {
+                $db = getDBConnection();
+
+                // Kiểm tra lại trùng lặp trước khi lưu
+                $stmt = $db->prepare("SELECT COUNT(*) FROM `NguoiDung` WHERE `TenDangNhap` = :username OR `Email` = :email");
+                $stmt->execute(['username' => $pending['username'], 'email' => $pending['email']]);
+                if ($stmt->fetchColumn() > 0) {
+                    $error = 'Tên đăng nhập hoặc Email đã tồn tại.';
+                    $active_tab = 'register';
+                } else {
+                    // Thêm người dùng mới chính thức vào CSDL
                     $insert_stmt = $db->prepare("INSERT INTO `NguoiDung` 
                         (`TenDangNhap`, `MatKhau`, `HoTen`, `Email`, `SoDienThoai`, `DiemUyTin`, `HangThanhVien`, `TrangThaiTaiKhoan`) 
                         VALUES 
                         (:username, :password, :fullname, :email, :phone, 0, 'Đồng', b'1')");
 
                     $insert_stmt->execute([
-                        'username' => $username,
-                        'password' => $hashed_password,
-                        'fullname' => $fullname,
-                        'email'    => $email,
-                        'phone'    => !empty($phone) ? $phone : null
+                        'username' => $pending['username'],
+                        'password' => $pending['password'],
+                        'fullname' => $pending['fullname'],
+                        'email'    => $pending['email'],
+                        'phone'    => $pending['phone']
                     ]);
 
                     $new_user_id = $db->lastInsertId();
@@ -152,17 +218,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt->execute(['id' => $new_user_id]);
                     $user = $stmt->fetch();
 
-                    // Chống Session Fixation
-                    session_regenerate_id(true);
+                    // Xóa dữ liệu OTP tạm
+                    unset($_SESSION['pending_register'], $_SESSION['otp_data']);
 
+                    session_regenerate_id(true);
                     $_SESSION['user_id'] = $user['MaNguoiDung'];
                     $_SESSION['user'] = $user;
                     $_SESSION['login_time'] = time();
                     $_SESSION['last_activity'] = time();
 
-                    writeSecurityLog("User ID " . $user['MaNguoiDung'] . " registered and logged in successfully");
+                    writeSecurityLog("User ID " . $user['MaNguoiDung'] . " verified email and registered successfully");
 
-                    $success = 'Đăng ký tài khoản thành công!';
                     $redirect = $_GET['redirect'] ?? 'index.php';
                     $allowed_redirects = ['index.php', 'post_product.php', 'profile.php', 'seller.php', 'admin.php'];
                     $parsed = parse_url($redirect);
@@ -174,8 +240,105 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 }
             } catch (Exception $e) {
-                $error = 'Lỗi đăng ký: ' . $e->getMessage();
+                $error = 'Lỗi lưu tài khoản: ' . $e->getMessage();
+                $active_tab = 'verify_register_otp';
             }
+        }
+    } elseif (isset($_POST['action_request_forgot_otp'])) {
+        $forgot_email = trim($_POST['forgot_email'] ?? '');
+
+        if (empty($forgot_email) || !filter_var($forgot_email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Vui lòng nhập địa chỉ email hợp lệ.';
+            $active_tab = 'forgot';
+        } else {
+            try {
+                $db = getDBConnection();
+                $stmt = $db->prepare("SELECT MaNguoiDung FROM `NguoiDung` WHERE `Email` = :email");
+                $stmt->execute(['email' => $forgot_email]);
+                $user_id = $stmt->fetchColumn();
+
+                if (!$user_id) {
+                    $error = 'Địa chỉ Email này chưa được đăng ký trên hệ thống.';
+                    $active_tab = 'forgot';
+                } else {
+                    $otp_code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                    $_SESSION['otp_data'] = [
+                        'code'    => $otp_code,
+                        'email'   => $forgot_email,
+                        'expire'  => time() + 300,
+                        'purpose' => 'forgot'
+                    ];
+
+                    if (sendOTPEmail($forgot_email, $otp_code, 'forgot')) {
+                        $success = "Mã OTP khôi phục mật khẩu đã được gửi đến <strong>" . htmlspecialchars($forgot_email) . "</strong>. Vui lòng kiểm tra hộp thư!";
+                        $active_tab = 'verify_forgot_otp';
+                    } else {
+                        $error = "Không thể gửi email OTP. Vui lòng thử lại sau.";
+                        $active_tab = 'forgot';
+                    }
+                }
+            } catch (Exception $e) {
+                $error = 'Lỗi hệ thống: ' . $e->getMessage();
+                $active_tab = 'forgot';
+            }
+        }
+    } elseif (isset($_POST['action_verify_forgot_otp'])) {
+        $otp_code = trim($_POST['otp_code'] ?? '');
+        $new_password = $_POST['new_password'] ?? '';
+        $confirm_new_password = $_POST['confirm_new_password'] ?? '';
+        $otp_data = $_SESSION['otp_data'] ?? null;
+
+        if (!$otp_data || $otp_data['purpose'] !== 'forgot') {
+            $error = 'Phiên xác thực đã hết hạn. Vui lòng yêu cầu lại mã OTP.';
+            $active_tab = 'forgot';
+        } elseif (empty($otp_code)) {
+            $error = 'Vui lòng nhập mã OTP.';
+            $active_tab = 'verify_forgot_otp';
+        } elseif (time() > $otp_data['expire']) {
+            $error = 'Mã OTP đã hết hạn (5 phút). Vui lòng yêu cầu lại mã.';
+            $active_tab = 'verify_forgot_otp';
+        } elseif ($otp_code !== $otp_data['code']) {
+            $error = 'Mã OTP không chính xác.';
+            $active_tab = 'verify_forgot_otp';
+        } elseif (mb_strlen($new_password) < 6) {
+            $error = 'Mật khẩu mới phải có ít nhất 6 ký tự.';
+            $active_tab = 'verify_forgot_otp';
+        } elseif (!preg_match('/[A-Z]/', $new_password) || !preg_match('/[a-z]/', $new_password) || !preg_match('/[0-9]/', $new_password) || !preg_match('/[^a-zA-Z0-9]/', $new_password)) {
+            $error = 'Mật khẩu mới phải chứa ít nhất 1 chữ cái viết hoa, 1 chữ cái viết thường, 1 chữ số và 1 ký tự đặc biệt.';
+            $active_tab = 'verify_forgot_otp';
+        } elseif ($new_password !== $confirm_new_password) {
+            $error = 'Mật khẩu xác nhận không khớp.';
+            $active_tab = 'verify_forgot_otp';
+        } else {
+            try {
+                $db = getDBConnection();
+                $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
+                $stmt = $db->prepare("UPDATE `NguoiDung` SET `MatKhau` = :pass WHERE `Email` = :email");
+                $stmt->execute(['pass' => $hashed_password, 'email' => $otp_data['email']]);
+
+                writeSecurityLog("Password reset successfully for email: " . $otp_data['email']);
+                unset($_SESSION['otp_data']);
+
+                $success = 'Đặt lại mật khẩu thành công! Vui lòng đăng nhập bằng mật khẩu mới.';
+                $active_tab = 'login';
+            } catch (Exception $e) {
+                $error = 'Lỗi cập nhật mật khẩu: ' . $e->getMessage();
+                $active_tab = 'verify_forgot_otp';
+            }
+        }
+    } elseif (isset($_POST['action_resend_otp'])) {
+        $otp_data = $_SESSION['otp_data'] ?? null;
+        if ($otp_data && !empty($otp_data['email'])) {
+            $new_code = str_pad((string)random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $_SESSION['otp_data']['code'] = $new_code;
+            $_SESSION['otp_data']['expire'] = time() + 300;
+
+            if (sendOTPEmail($otp_data['email'], $new_code, $otp_data['purpose'])) {
+                $success = "Đã gửi lại mã OTP mới đến email <strong>" . htmlspecialchars($otp_data['email']) . "</strong>.";
+            } else {
+                $error = "Không thể gửi lại email. Vui lòng thử lại sau.";
+            }
+            $active_tab = ($otp_data['purpose'] === 'forgot') ? 'verify_forgot_otp' : 'verify_register_otp';
         }
     }
 }
@@ -195,6 +358,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin: 60px auto;
             width: 100%;
             padding: 0 16px;
+        }
+        .password-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .password-input-wrapper input {
+            padding-right: 42px !important;
+            width: 100%;
+        }
+        .password-toggle-btn {
+            position: absolute;
+            right: 12px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: #94a3b8;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            z-index: 5;
+        }
+        .password-toggle-btn:hover {
+            color: var(--primary, #2563eb);
         }
     </style>
 </head>
@@ -228,12 +418,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <!-- Thông báo lỗi hoặc thành công -->
                 <?php if (!empty($error)): ?>
                     <div class="alert-message error">
-                        <?php echo htmlspecialchars($error); ?>
+                        <?php echo $error; ?>
                     </div>
                 <?php endif; ?>
                 <?php if (!empty($success)): ?>
                     <div class="alert-message success">
-                        <?php echo htmlspecialchars($success); ?>
+                        <?php echo $success; ?>
                     </div>
                 <?php endif; ?>
 
@@ -241,6 +431,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="tabs-container">
                     <button type="button" id="login-tab-btn" class="tab-btn active" onclick="switchTab('login')">Đăng Nhập</button>
                     <button type="button" id="register-tab-btn" class="tab-btn" onclick="switchTab('register')">Đăng Ký</button>
+                    <button type="button" id="forgot-tab-btn" class="tab-btn" onclick="switchTab('forgot')">Quên Mật Khẩu</button>
                 </div>
 
                 <!-- Form Đăng Nhập -->
@@ -253,7 +444,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="form-group">
                             <label for="login_password">Mật khẩu</label>
-                            <input type="password" name="password" id="login_password" class="form-control" placeholder="••••••••" required>
+                            <div class="password-input-wrapper">
+                                <input type="password" name="password" id="login_password" class="form-control" placeholder="••••••••" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('login_password', this)" title="Hiện mật khẩu">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                            <div style="text-align: right; margin-top: 6px;">
+                                <a href="#" onclick="switchTab('forgot'); return false;" style="color: var(--primary); font-size: 13px; font-weight: 500; text-decoration: none;">Quên mật khẩu?</a>
+                            </div>
                         </div>
                         <button type="submit" name="action_login" class="btn btn-primary" style="margin-top: 10px;">Đăng Nhập</button>
                     </form>
@@ -277,20 +476,109 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         <div class="form-group">
                             <label for="reg_phone">Số điện thoại</label>
-                            <input type="text" name="phone" id="reg_phone" class="form-control" placeholder="0905xxxxxx">
+                            <input type="tel" name="phone" id="reg_phone" class="form-control" placeholder="0905123456" maxlength="10" pattern="(03|05|07|08|09)[0-9]{8}">
+                            <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px; display: block; text-align: left;">
+                                Số điện thoại di động Việt Nam gồm 10 chữ số (bắt đầu bằng 03, 05, 07, 08, 09).
+                            </small>
                         </div>
                         <div class="form-group">
                             <label for="reg_password">Mật khẩu <span style="color:var(--error)">*</span></label>
-                            <input type="password" name="password" id="reg_password" class="form-control" placeholder="••••••••" required>
+                            <div class="password-input-wrapper">
+                                <input type="password" name="password" id="reg_password" class="form-control" placeholder="••••••••" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('reg_password', this)" title="Hiện mật khẩu">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
                             <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px; display: block; text-align: left;">
                                 Mật khẩu phải có ít nhất 6 ký tự (bao gồm ít nhất 1 chữ viết hoa, 1 chữ viết thường, 1 chữ số và 1 ký tự đặc biệt).
                             </small>
                         </div>
                         <div class="form-group">
                             <label for="reg_confirm_password">Xác nhận mật khẩu <span style="color:var(--error)">*</span></label>
-                            <input type="password" name="confirm_password" id="reg_confirm_password" class="form-control" placeholder="••••••••" required>
+                            <div class="password-input-wrapper">
+                                <input type="password" name="confirm_password" id="reg_confirm_password" class="form-control" placeholder="••••••••" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('reg_confirm_password', this)" title="Hiện mật khẩu">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
                         </div>
-                        <button type="submit" name="action_register" class="btn btn-primary" style="margin-top: 10px;">Đăng Ký Tài Khoản</button>
+                        <button type="submit" name="action_register" class="btn btn-primary" style="margin-top: 10px;">Đăng Ký & Gửi Mã OTP</button>
+                    </form>
+                </div>
+
+                <!-- Form Xác Thực OTP Đăng Ký -->
+                <div id="verify_register_otp-view" class="form-view">
+                    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">Xác Thực Email Qua OTP</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">Vui lòng kiểm tra hộp thư Gmail và nhập mã OTP 6 chữ số để kích hoạt tài khoản.</p>
+                    <div style="background: rgba(254, 243, 199, 0.6); border: 1px solid #fde68a; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; text-align: left; font-size: 12.5px; color: #92400e; line-height: 1.5;">
+                        💡 <strong>Lưu ý quan trọng:</strong> Nếu không thấy email trong Hộp thư đến (Inbox), bạn hãy kiểm tra thêm trong thư mục <strong>Thư rác (Spam)</strong> hoặc <strong>Quảng cáo (Promotions)</strong> nhé!
+                    </div>
+                    <form method="POST" action="login_page.php<?php echo isset($_GET['redirect']) ? '?redirect=' . urlencode($_GET['redirect']) : ''; ?>">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                        <div class="form-group">
+                            <label for="otp_code_reg">Mã OTP 6 chữ số <span style="color:var(--error)">*</span></label>
+                            <input type="text" name="otp_code" id="otp_code_reg" class="form-control" placeholder="123456" maxlength="6" pattern="[0-9]{6}" style="text-align: center; font-size: 1.4rem; letter-spacing: 6px; font-weight: 700;" required>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-top: 14px;">
+                            <button type="submit" name="action_verify_register_otp" class="btn btn-primary" style="flex: 1;">Xác Nhận Kích Hoạt</button>
+                        </div>
+                    </form>
+                    <form method="POST" action="login_page.php" style="margin-top: 10px;">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                        <button type="submit" name="action_resend_otp" class="btn" style="width: 100%; background: transparent; color: var(--primary); text-decoration: underline; font-size: 13px;">Gửi lại mã OTP qua Gmail</button>
+                    </form>
+                </div>
+
+                <!-- Form Yêu Cầu Quên Mật Khẩu -->
+                <div id="forgot-view" class="form-view">
+                    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">Khôi Phục Mật Khẩu</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">Nhập email đã đăng ký của bạn để nhận mã OTP đặt lại mật khẩu.</p>
+                    <form method="POST" action="login_page.php">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                        <div class="form-group">
+                            <label for="forgot_email">Địa chỉ Email <span style="color:var(--error)">*</span></label>
+                            <input type="email" name="forgot_email" id="forgot_email" class="form-control" placeholder="email@example.com" required>
+                        </div>
+                        <button type="submit" name="action_request_forgot_otp" class="btn btn-primary" style="margin-top: 10px;">Gửi Mã OTP Khôi Phục</button>
+                    </form>
+                </div>
+
+                <!-- Form Xác Thực OTP & Đặt Lại Mật Khẩu Mới -->
+                <div id="verify_forgot_otp-view" class="form-view">
+                    <h3 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 8px;">Đặt Lại Mật Khẩu Mới</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">Nhập mã OTP vừa nhận trong Gmail và mật khẩu mới của bạn.</p>
+                    <div style="background: rgba(254, 243, 199, 0.6); border: 1px solid #fde68a; border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; text-align: left; font-size: 12.5px; color: #92400e; line-height: 1.5;">
+                        💡 <strong>Lưu ý quan trọng:</strong> Nếu không thấy email trong Hộp thư đến (Inbox), bạn hãy kiểm tra thêm trong thư mục <strong>Thư rác (Spam)</strong> hoặc <strong>Quảng cáo (Promotions)</strong> nhé!
+                    </div>
+                    <form method="POST" action="login_page.php">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                        <div class="form-group">
+                            <label for="otp_code_forgot">Mã OTP 6 chữ số <span style="color:var(--error)">*</span></label>
+                            <input type="text" name="otp_code" id="otp_code_forgot" class="form-control" placeholder="123456" maxlength="6" pattern="[0-9]{6}" style="text-align: center; font-size: 1.4rem; letter-spacing: 6px; font-weight: 700;" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="new_password">Mật khẩu mới <span style="color:var(--error)">*</span></label>
+                            <div class="password-input-wrapper">
+                                <input type="password" name="new_password" id="new_password" class="form-control" placeholder="••••••••" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('new_password', this)" title="Hiện mật khẩu">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="confirm_new_password">Xác nhận mật khẩu mới <span style="color:var(--error)">*</span></label>
+                            <div class="password-input-wrapper">
+                                <input type="password" name="confirm_new_password" id="confirm_new_password" class="form-control" placeholder="••••••••" required>
+                                <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('confirm_new_password', this)" title="Hiện mật khẩu">
+                                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="submit" name="action_verify_forgot_otp" class="btn btn-primary" style="margin-top: 10px;">Lưu Mật Khẩu Mới</button>
+                    </form>
+                    <form method="POST" action="login_page.php" style="margin-top: 10px;">
+                        <input type="hidden" name="csrf_token" value="<?php echo getCsrfToken(); ?>">
+                        <button type="submit" name="action_resend_otp" class="btn" style="width: 100%; background: transparent; color: var(--primary); text-decoration: underline; font-size: 13px;">Gửi lại mã OTP qua Gmail</button>
                     </form>
                 </div>
 
@@ -327,6 +615,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <script>
         function validateRegisterForm(e) {
+            const phone = document.getElementById('reg_phone').value.trim();
+            const phoneRegex = /^(03|05|07|08|09)[0-9]{8}$/;
+
+            if (phone !== '' && !phoneRegex.test(phone)) {
+                alert('Số điện thoại không hợp lệ! Vui lòng nhập số điện thoại Việt Nam gồm 10 số (bắt đầu bằng 03, 05, 07, 08, 09).');
+                e.preventDefault();
+                return false;
+            }
+
             const password = document.getElementById('reg_password').value;
             const confirmPassword = document.getElementById('reg_confirm_password').value;
 
@@ -357,6 +654,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         function switchTab(tabName) {
+            let buttonTab = tabName;
+            if (tabName === 'verify_register_otp') buttonTab = 'register';
+            if (tabName === 'verify_forgot_otp') buttonTab = 'forgot';
+
             // Deactivate all tab buttons
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('active');
@@ -367,7 +668,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             });
 
             // Activate chosen tab button
-            const activeBtn = document.getElementById(tabName + '-tab-btn');
+            const activeBtn = document.getElementById(buttonTab + '-tab-btn');
             if (activeBtn) activeBtn.classList.add('active');
             
             // Show chosen form view
@@ -378,9 +679,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             sessionStorage.setItem('active_auth_tab', tabName);
         }
 
-        // Initialize default tab (either login or register, default to login)
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+
+            const eyeOpen = `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+            const eyeSlash = `<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+
+            btn.innerHTML = isPassword ? eyeSlash : eyeOpen;
+            btn.setAttribute('title', isPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu');
+        }
+
+        // Initialize default tab (either login, register, forgot, or verify)
         window.addEventListener('DOMContentLoaded', () => {
-            const savedTab = sessionStorage.getItem('active_auth_tab') || 'login';
+            const phpActiveTab = '<?php echo $active_tab ?? ""; ?>';
+            const savedTab = phpActiveTab || sessionStorage.getItem('active_auth_tab') || 'login';
             if (document.getElementById('login-view')) {
                 switchTab(savedTab);
             }

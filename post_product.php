@@ -75,6 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             throw new Exception("Vui lòng nhập đầy đủ các thông tin bắt buộc.");
         }
 
+        if (!isValidVNPhoneNumber($phone)) {
+            throw new Exception("Số điện thoại không hợp lệ. Vui lòng nhập số điện thoại Việt Nam 10 chữ số (bắt đầu bằng 03, 05, 07, 08, 09).");
+        }
+
         // 1. Cập nhật Số điện thoại người dùng
         $upd_user = $db->prepare("UPDATE `NguoiDung` SET `SoDienThoai` = :phone WHERE `MaNguoiDung` = :uid");
         $upd_user->execute(['phone' => $phone, 'uid' => $user_data['MaNguoiDung']]);
@@ -451,7 +455,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <div class="form-row">
                             <div class="form-group">
                                 <label for="phone">Số điện thoại liên hệ *</label>
-                                <input type="tel" id="phone" name="phone" class="form-control" placeholder="VD: 0901234567" value="<?php echo htmlspecialchars($user_data['SoDienThoai'] ?? ''); ?>" required>
+                                <?php 
+                                    $has_phone = !empty($user_data['SoDienThoai']);
+                                    $user_phone = htmlspecialchars($user_data['SoDienThoai'] ?? '');
+                                ?>
+                                <input type="tel" id="phone" name="phone" class="form-control" placeholder="VD: 0901234567" 
+                                       value="<?php echo $user_phone; ?>" 
+                                       maxlength="10" pattern="(03|05|07|08|09)[0-9]{8}"
+                                       <?php echo $has_phone ? 'readonly style="background-color: #f1f5f9; cursor: not-allowed;"' : 'required'; ?>>
+                                <small style="color: var(--text-muted); font-size: 12px; margin-top: 4px; display: block;">
+                                    <?php if ($has_phone): ?>
+                                        ✓ Tự động lấy từ số điện thoại đã đăng ký của bạn.
+                                    <?php else: ?>
+                                        Nhập số điện thoại di động Việt Nam (10 chữ số, bắt đầu bằng 03, 05, 07, 08, 09).
+                                    <?php endif; ?>
+                                </small>
                             </div>
 
                             <div class="form-group">
@@ -844,6 +862,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 };
             });
         }
+        const sellerRegForm = document.querySelector('form input[name="action"][value="register_seller"]')?.closest('form');
+        if (sellerRegForm) {
+            sellerRegForm.addEventListener('submit', function(e) {
+                const phoneInput = document.getElementById('phone');
+                if (phoneInput && !phoneInput.readOnly) {
+                    const phoneVal = phoneInput.value.trim();
+                    const phoneRegex = /^(03|05|07|08|09)[0-9]{8}$/;
+                    if (!phoneRegex.test(phoneVal)) {
+                        alert('Số điện thoại không hợp lệ! Vui lòng nhập số điện thoại Việt Nam gồm 10 số (bắt đầu bằng 03, 05, 07, 08, 09).');
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+            });
+        }
+
         // Tự động thêm CSRF Token vào tất cả các form POST
         document.querySelectorAll('form[method="POST"], form[method="post"]').forEach(form => {
             if (!form.querySelector('input[name="csrf_token"]')) {

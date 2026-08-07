@@ -178,3 +178,123 @@ function updateSellerReputationByProduct($db, int $productId, int $oldStars = 0,
     $upStmt->execute(['rep' => $updatedRep, 'uid' => $sellerId]);
 }
 
+/**
+ * Kiểm tra số điện thoại có đúng định dạng nhà mạng Việt Nam (10 số) hay không
+ */
+function isValidVNPhoneNumber($phone): bool
+{
+    $cleanPhone = preg_replace('/[\s\-\.]/', '', trim((string)$phone));
+    $pattern = '/^(03|05|07|08|09)[0-9]{8}$/';
+    return preg_match($pattern, $cleanPhone) === 1;
+}
+
+// ============================================================================
+// CẤU HÌNH GMAIL SMTP (DÙNG ĐỂ GỬI MÃ OTP XÁC THỰC & QUÊN MẬT KHẨU)
+// ============================================================================
+define('SMTP_HOST', 'ssl://smtp.gmail.com');
+define('SMTP_PORT', 465);
+define('SMTP_USER', 'anhduylehuynh@gmail.com');
+define('SMTP_PASS', 'wqupdhvxfsgfpmmm');
+define('SMTP_FROM_NAME', 'Chợ Đồ Cũ');
+
+/**
+ * Gửi Email chứa mã OTP 6 số qua Gmail SMTP
+ */
+function sendOTPEmail(string $toEmail, string $otpCode, string $purpose = 'register'): bool
+{
+    $socket = @fsockopen(SMTP_HOST, SMTP_PORT, $errno, $errstr, 12);
+    if (!$socket) {
+        return false;
+    }
+
+    $read = function ($socket) {
+        $response = '';
+        while ($str = @fgets($socket, 512)) {
+            $response .= $str;
+            if (substr($str, 3, 1) == ' ') break;
+        }
+        return $response;
+    };
+
+    $write = function ($socket, $cmd) {
+        @fputs($socket, $cmd . "\r\n");
+    };
+
+    $read($socket); // 220 greeting
+
+    $write($socket, "EHLO localhost");
+    $read($socket);
+
+    $write($socket, "AUTH LOGIN");
+    $read($socket);
+
+    $write($socket, base64_encode(SMTP_USER));
+    $read($socket);
+
+    $write($socket, base64_encode(SMTP_PASS));
+    $authResp = $read($socket);
+
+    if (strpos($authResp, '235') === false) {
+        @fclose($socket);
+        return false;
+    }
+
+    $write($socket, "MAIL FROM: <" . SMTP_USER . ">");
+    $read($socket);
+
+    $write($socket, "RCPT TO: <" . $toEmail . ">");
+    $read($socket);
+
+    $write($socket, "DATA");
+    $read($socket);
+
+    $title = ($purpose === 'forgot') ? 'Khôi phục Mật khẩu' : 'Xác thực Đăng ký Tài khoản';
+    $actionDesc = ($purpose === 'forgot') 
+        ? 'Dưới đây là mã OTP 6 chữ số để xác nhận đặt lại mật khẩu cho tài khoản của bạn trên hệ thống <strong>Chợ Đồ Cũ</strong>:' 
+        : 'Cảm ơn bạn đã đăng ký tài khoản tại <strong>Chợ Đồ Cũ</strong>! Dưới đây là mã xác thực OTP của bạn:';
+
+    $subject = "[Chợ Đồ Cũ] Mã xác thực OTP ($title): $otpCode";
+
+    $body = '
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+        <div style="text-align: center; padding-bottom: 16px; border-bottom: 2px solid #3b82f6;">
+            <h2 style="color: #1e3a8a; margin: 0; font-size: 22px;">🛒 CHỢ ĐỒ CŨ</h2>
+            <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Nền tảng mua bán đồ cũ trực tuyến hiện đại</p>
+        </div>
+        <div style="padding: 20px 0; color: #334155; line-height: 1.6; font-size: 14px;">
+            <p>Xin chào,</p>
+            <p>' . $actionDesc . '</p>
+            <div style="text-align: center; margin: 24px 0;">
+                <span style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #2563eb; background: #eff6ff; padding: 12px 28px; border-radius: 12px; border: 1px dashed #60a5fa;">
+                    ' . $otpCode . '
+                </span>
+            </div>
+            <p style="color: #ef4444; font-size: 13px; text-align: center; font-weight: bold;">
+                ⚠️ Mã OTP này có hiệu lực trong 5 phút. Vui lòng tuyệt đối không chia sẻ mã này với bất kỳ ai!
+            </p>
+        </div>
+        <div style="text-align: center; padding-top: 16px; border-top: 1px solid #f1f5f9; color: #94a3b8; font-size: 12px;">
+            <p style="margin: 0;">Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này.</p>
+            <p style="margin: 4px 0 0;">&copy; 2026 Chợ Đồ Cũ Inc.</p>
+        </div>
+    </div>';
+
+    $headers  = "From: =?UTF-8?B?" . base64_encode(SMTP_FROM_NAME) . "?= <" . SMTP_USER . ">\r\n";
+    $headers .= "Reply-To: <" . SMTP_USER . ">\r\n";
+    $headers .= "To: <" . $toEmail . ">\r\n";
+    $headers .= "Subject: =?UTF-8?B?" . base64_encode($subject) . "?=\r\n";
+    $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+
+    $content = $headers . "\r\n" . $body . "\r\n.\r\n";
+
+    $write($socket, $content);
+    $dataResp = $read($socket);
+
+    $write($socket, "QUIT");
+    @fclose($socket);
+
+    return strpos($dataResp, '250') !== false;
+}
+
