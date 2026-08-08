@@ -1217,5 +1217,6 @@ $avg_rating = (float)($db->query("
         function openVoucherModal() { document.getElementById('voucherModal').style.display = 'flex'; }
         function closeVoucherModal() { document.getElementById('voucherModal').style.display = 'none'; }
     </script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 </html>

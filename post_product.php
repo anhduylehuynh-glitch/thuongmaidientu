@@ -889,6 +889,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             }
         });
     </script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 
 </html>

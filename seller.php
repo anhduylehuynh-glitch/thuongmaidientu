@@ -645,6 +645,7 @@ $created_date = date('m/Y', strtotime($seller_info['NgayTao'] ?? 'now'));
             }
         });
     </script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 
 </html>

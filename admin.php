@@ -5247,6 +5247,7 @@ try {
         }
         function closeResolveIncidentModal() { document.getElementById('resolveIncidentModal').style.display = 'none'; }
     </script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 
 </html>

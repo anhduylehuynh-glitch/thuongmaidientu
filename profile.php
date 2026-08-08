@@ -706,5 +706,6 @@ function decodeTransactionStatus($status_val) {
             }
         }
     </script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 </html>

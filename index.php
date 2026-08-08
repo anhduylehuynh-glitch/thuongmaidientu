@@ -978,6 +978,7 @@ if (empty($products) && empty($keyword) && empty($category)) {
             }
         });
     </script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 
 </html>

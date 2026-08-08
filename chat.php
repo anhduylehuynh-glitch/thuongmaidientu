@@ -603,5 +603,6 @@ $csrf_token = getCsrfToken();
         const CSRF_TOKEN = "<?=$csrf_token?>";
     </script>
     <script src="assets/js/chat.js"></script>
+    <?php include_once __DIR__ . '/includes/chatbot.php'; ?>
 </body>
 </html>
